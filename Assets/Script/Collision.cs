@@ -6,6 +6,8 @@ public class Collision
 {
     public List<TimeSlice> timeSlices;
     public string folderPath;
+    public int timeSliceDilation = 1;
+    public int coordinateDilation = 1;
 
     public Collision()
     {
@@ -17,11 +19,21 @@ public class Collision
         timeSlices.Add(slice);
     }
 
-    public void Loader(string pFolderPath)
+    public void Loader(string pFolderPath, int pTimeSliceDilation, int pCoordinateDilation)
     {
         folderPath = pFolderPath;
-        int timestep = 0;
-        
+        int timestep = 1;
+        int skippedCount = 0;
+        TimeSlice newSlice;
+
+        string fFileName = "All_mesh_data_at_timestep_0.csv";
+        string fFullPath = Path.Combine(pFolderPath, fFileName);
+
+        if (File.Exists(fFullPath))
+        {
+            newSlice = new TimeSlice(fFullPath, pCoordinateDilation);
+            timeSlices.Add(newSlice);
+        }
 
         while (true)
         {
@@ -31,9 +43,16 @@ public class Collision
 
             if (File.Exists(fullPath))
             {
-                //Debug.Log("Found: " + fileName);
-                TimeSlice newSlice = new TimeSlice(fullPath);
-                timeSlices.Add(newSlice);
+                if (skippedCount == (pTimeSliceDilation - 1))
+                {
+                    newSlice = new TimeSlice(fullPath, pCoordinateDilation);
+                    timeSlices.Add(newSlice);
+                    skippedCount = 0;
+                } else
+                {
+                    skippedCount++;
+                }
+                
             }
             timestep++;
             if (timestep > 101) break;

@@ -7,11 +7,13 @@ public class TimeSlice
 {
     public Coordinate[,] coordinates2D;
     public List<Coordinate> coordinates1D;
+    public Coordinate[,] coordinatesOutline2D; //to be added by the izaac
     public int dilution;
     public string filePath;
 
-    public TimeSlice(string pFilePath)
+    public TimeSlice(string pFilePath, int pDilution)
     {
+        this.dilution = pDilution;
         this.filePath = pFilePath;
         this.Create1DArray();
         this.Create2DArray();
@@ -29,7 +31,6 @@ public class TimeSlice
         for (int i = 0; i < coordinates1D.Count; i++)
         {
             Coordinate coordinate = coordinates1D[i];
-
             // Check if we need to move to a new row
             if (i > 0 && coordinates1D[i - 1].x < coordinate.x)
             {
@@ -41,8 +42,6 @@ public class TimeSlice
             currentCol++;
         }
         this.coordinates2D = coordinates;
-
-
     }
 
     public void Create1DArray()
@@ -54,7 +53,12 @@ public class TimeSlice
             reader.ReadLine();
             while (reader.EndOfStream == false)
             {
+                for (int i = 0; i < (dilution - 1) ; i++)
+                {
+                    reader.ReadLine();
+                }
                 var content = reader.ReadLine();
+                if (content == null) break;
                 var splitRow = content.Split(',');
 
                 if (RowHasData(splitRow))
@@ -72,9 +76,7 @@ public class TimeSlice
                     Coordinate newCoordinate = new Coordinate(x, y, density, pressure, temperature, vel_x, vel_y);
                     coordinates1D.Add(newCoordinate);
                 }
-
             }
-
         }
     }
 
