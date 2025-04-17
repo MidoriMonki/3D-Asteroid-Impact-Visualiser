@@ -17,7 +17,7 @@ public class Analysis
         if (validFolder())
         {
 
-            resultString += $"File Count (Time Slices): {findTimeSlices()}";
+            resultString += $"{findTimeSlices()}";
 
         }
         return resultString;
@@ -29,7 +29,7 @@ public class Analysis
         if (validFolder())
         {
 
-            resultString += $"Rows per File (Coordinates): {findDataAmount()}";
+            resultString += $"{findDataAmount()}";
 
         }
         return resultString;
@@ -53,10 +53,10 @@ public class Analysis
         string returnString = "";
         if (!validFolder())
         {
-            returnString = "Failure to find folder";
+            returnString = "failure to find folder";
         } else
         {
-            returnString = "Successfully found folder";
+            returnString = "successfully found folder";
         }
         return returnString;
     }

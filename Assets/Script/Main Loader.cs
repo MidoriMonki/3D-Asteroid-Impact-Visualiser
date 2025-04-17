@@ -9,9 +9,17 @@ public class MainLoader : MonoBehaviour
 {
     public int timeSliceDilation = 1;
     public int coordinateDilation = 1;
-    public TMPro.TMP_Text timeSliceDilationDisplay;
-    public TMPro.TMP_Text coordinateDilationDisplay;
+    public TMPro.TMP_InputField timeSliceDilationDisplay;
+    public TMPro.TMP_InputField coordinateDilationDisplay;
 
+    public Button TimeSliceUp;
+    public Button TimeSliceDown;
+    public Button CoordinateUp;
+    public Button CoordinateDown;
+
+
+    public TMPro.TMP_Text resultTimeSlice;
+    public TMPro.TMP_Text resultCoordinate;
 
     public TMPro.TMP_InputField fileStructure;
     public TMPro.TMP_Text foundTimeSlice;
@@ -24,6 +32,47 @@ public class MainLoader : MonoBehaviour
     void Start()
     {
         LoadButton.interactable = false;
+        timeSliceDilationDisplay.interactable = false;
+        coordinateDilationDisplay.interactable = false;
+        TimeSliceUp.interactable = false;
+        TimeSliceDown.interactable = false;
+        CoordinateUp.interactable = false;
+        CoordinateDown.interactable = false;
+
+    }
+
+    public void TimeSliceResultUpdate()
+    {
+
+        int foundValue;
+        if (int.TryParse(foundTimeSlice.text, out foundValue))
+        {
+            int result = (foundValue / timeSliceDilation) +1;
+            if (result > foundValue)
+            {
+                result = foundValue;
+            }
+            resultTimeSlice.text = result.ToString();
+        }
+        else
+        {
+            resultTimeSlice.text = "Invalid";
+        }
+    }
+
+    public void CoordinateResultUpdate()
+    {
+
+        int foundValue;
+        if (int.TryParse(foundCoordinate.text, out foundValue))
+        {
+            int result = foundValue / coordinateDilation;
+            resultCoordinate.text = result.ToString();
+        }
+        else
+        {
+            resultCoordinate.text = "Invalid";
+        }
     }
 
     // Update is called once per frame
@@ -32,13 +81,46 @@ public class MainLoader : MonoBehaviour
         
     }
 
+    public void TimeSliceDilationUpdate()
+    {
+        int parsedValue;
+        if (int.TryParse(timeSliceDilationDisplay.text, out parsedValue) && parsedValue > 0)
+        {
+            timeSliceDilation = parsedValue;
+        }
+        else
+        {
+            timeSliceDilation = 1;
+            timeSliceDilationDisplay.text = "1";
+        }
+
+        TimeSliceResultUpdate();
+        //resultTimeSlice.text = timeSliceDilation;
+    }
+
+    public void CoordinateDilationUpdate()
+    {
+        int parsedValue;
+        if (int.TryParse(coordinateDilationDisplay.text, out parsedValue) && parsedValue > 0)
+        {
+            coordinateDilation = parsedValue;
+        }
+        else
+        {
+            coordinateDilation = 1;
+            coordinateDilationDisplay.text = "1";
+        }
+        CoordinateResultUpdate();
+    }
+
     public void TimeSliceDilationUp()
     {
-        if (!(timeSliceDilation == 10)) //code upper bound
+        if (!(timeSliceDilation == 9999)) //code upper bound
         {
-            timeSliceDilation++;
+            timeSliceDilation += 1;
             timeSliceDilationDisplay.text = timeSliceDilation.ToString();
         }
+        TimeSliceResultUpdate();
     }
 
     public void TimeSliceDilationDown()
@@ -48,16 +130,17 @@ public class MainLoader : MonoBehaviour
             timeSliceDilation--;
             timeSliceDilationDisplay.text = timeSliceDilation.ToString();
         }
-
+        TimeSliceResultUpdate();
     }
 
     public void CoordinateDilationUp()
     {
-        if (!(coordinateDilation == 10))
+        if (!(coordinateDilation == 9999))
         {
-            coordinateDilation++;
+            coordinateDilation+= 1;
             coordinateDilationDisplay.text = coordinateDilation.ToString();
         }
+        CoordinateResultUpdate();
     }
 
     public void CoordinateDilationDown()
@@ -67,6 +150,7 @@ public class MainLoader : MonoBehaviour
             coordinateDilation--;
             coordinateDilationDisplay.text = coordinateDilation.ToString();
         }
+        CoordinateResultUpdate();
     }
 
     public void FindButton()
@@ -79,12 +163,24 @@ public class MainLoader : MonoBehaviour
         {
             fileStructure.textComponent.color = Color.green;
             LoadButton.interactable = true;
+            timeSliceDilationDisplay.interactable = true;
+            coordinateDilationDisplay.interactable = true;
+            TimeSliceUp.interactable = true;
+            TimeSliceDown.interactable = true;
+            CoordinateUp.interactable = true;
+            CoordinateDown.interactable = true;
 
         }
         else
         {
             fileStructure.textComponent.color = Color.red;
             LoadButton.interactable = false;
+            timeSliceDilationDisplay.interactable = false;
+            coordinateDilationDisplay.interactable = false;
+            TimeSliceUp.interactable = false;
+            TimeSliceDown.interactable = false;
+            CoordinateUp.interactable = false;
+            CoordinateDown.interactable = false;
         }   
     }
 
