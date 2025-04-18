@@ -31,9 +31,13 @@ public class Collision
 
             if (File.Exists(fullPath))
             {
-                //Debug.Log("Found: " + fileName);
+                Debug.Log("Found: " + fileName);
                 TimeSlice newSlice = new TimeSlice(fullPath);
                 timeSlices.Add(newSlice);
+            }
+            else
+            {
+                Debug.Log("No file found :(");
             }
             timestep++;
             if (timestep > 101) break;
