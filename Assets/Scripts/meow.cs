@@ -3,8 +3,6 @@ using UnityEngine.UI;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Runtime.Serialization;
-using System.Runtime.Serialization.Formatters.Binary;
 
 [RequireComponent(typeof(MeshFilter))]
 public class meow : MonoBehaviour{
@@ -17,38 +15,71 @@ public class meow : MonoBehaviour{
     public int strength = 20;
     public int sine = 1;
     public Text text;
+    public int outlineLength;
     public Gradient gradient;
 
     private List<Vector3> verticeList = new List<Vector3>();
 
     void Start(){
-
-
-
         mesh = new Mesh();
         mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
         GetComponent<MeshFilter>().mesh = mesh;
-        //createTriangle();
-        //updateMesh();
+    }
 
-        createOut();
-        //createOutline();
-        //wrapOutline();
+    void readFile(){
+        string fileName = $"csv/All_mesh_data_at_timestep_4.csv";
+        verticeList = new List<Vector3>();
+        if (File.Exists(fileName)){
+            Debug.Log("Found: " + fileName);
+            using (var reader = new StreamReader(fileName)){
+                reader.ReadLine();
+                var content = reader.ReadLine();
+                while (reader.EndOfStream == false){
+                    var splitRow = content.Split(',');
+                    Debug.Log(content);
+                    float x = ParseFloat(splitRow[0]);
+                    float y = ParseFloat(splitRow[1]);
+                    verticeList.Add(new Vector3(0, y, x));
+                    content = reader.ReadLine();
+                }
+            }
+            outlineLength = verticeList.Count;
+        }
+    }
+
+    public float ParseFloat(string value){
+        float result;
+        if (!float.TryParse(value, out result))
+        {
+            //Debug.LogWarning($"Invalid float format: '{value}'. Defaulting to 0.");
+            result = 0f;  // Default to 0 if parsing fails
+        }
+        return result;
     }
 
     void createOutline(){
-        float angle = 0;
-        //vertices = new Vector3[strength];
+        //sort the outline
+        vertices = new Vector3[outlineLength];
+        LinkedList root = new LinkedList(verticeList[(int)Mathf.Floor(outlineLength / 2)]);
+        verticeList.RemoveAt((int)Mathf.Floor(outlineLength / 2));
 
-        for (int i = 0; i < strength; i++){
-            angle += Mathf.PI / strength;
-            verticeList.Add(new Vector3(0, Mathf.Cos(angle) * 6, Mathf.Sin(angle) * 6));
+        int meow = 0;
+        meow = head(root);
+        while (meow == 0) { }
+        tail(root);
+
+        root = root.getRoot();
+
+        for (int i = 0; i < outlineLength; i++)
+        {
+            Debug.Log(i);
+            vertices[i] = root.getPosition();
+            root = root.getTail();
         }
-    
     }
 
     int head(LinkedList l){
-        float distance = 1;
+        float distance = 2;
         int index = 0;
         for (int i=0; i<verticeList.Count; i++){
            if (Vector3.Distance(verticeList[i], l.getPosition()) < distance){
@@ -65,7 +96,7 @@ public class meow : MonoBehaviour{
     }
 
     int tail(LinkedList l){
-        float distance = 1;
+        float distance = 2;
         int index = 0;
         for (int i=0; i<verticeList.Count; i++){
            if (Vector3.Distance(verticeList[i], l.getPosition()) < distance){
@@ -81,48 +112,11 @@ public class meow : MonoBehaviour{
         return 1;
     }
 
-
-    void createOut(){
-        /*
-        float angle = 0;
-        vertices = new Vector3[strength];
-        for (int i = 0; i < strength; i++){
-            angle += Mathf.PI / strength;
-            vertices[i] = new Vector3(0, 6-(i/(float)strength*12), Mathf.Sin(angle*sine) * 3 + 3);
-        }*/
-        int count = 0;
-        vertices = new Vector3[strength];
-        for (int i = 0; i < strength; i++){
-            while (16 * ((Mathf.Sin(3*(i+count)) - 3*Mathf.Sin(i+count)) / 4) < 0){
-                count++;
-            }
-            verticeList.Add(new Vector3(0, 13*Mathf.Cos(i+count) - 5*Mathf.Cos(2*(i+count)) - 2*Mathf.Cos(3*(i+count)) - Mathf.Cos(4*(i+count)), 16*(Mathf.Sin(3*(i+count)) - 3*Mathf.Sin(i+count))/4));
-        }
-      
-        //sort the outline
-        LinkedList root = new LinkedList(verticeList[(int)Mathf.Floor(strength/2)]);
-        verticeList.RemoveAt((int)Mathf.Floor(strength/2));
-        
-        int meow = 0;
-        meow = head(root);
-        while(meow==0){}
-        tail(root);
-
-        root = root.getRoot();
-
-        for(int i=0; i<strength; i++){
-            vertices[i] = root.getPosition();
-            root = root.getTail();
-        }
-
-
-    }
-
     void wrapOutline(){
         float angle = 0;
         int count = 0;
-        Vector3[] verticesF = new Vector3[strength * strength];
-        for (int i = 0; i < strength; i++){
+        Vector3[] verticesF = new Vector3[outlineLength * strength];
+        for (int i = 0; i < outlineLength; i++){
             angle = 0;
             float y = vertices[i].y;
             float z = vertices[i].z;
@@ -136,13 +130,14 @@ public class meow : MonoBehaviour{
         vertices = verticesF;
         colours = new Color[vertices.Length];
         for (int i = 0; i < colours.Length; i++){
-            colours[i] = gradient.Evaluate(i / (float)colours.Length);
+            colours[i] = gradient.Evaluate(Mathf.Floor(i/strength)/outlineLength);
         }
     }
 
     void trianglesWrap(){
-        triangles = new int[strength * (strength - 2) * 6];
-        for (int i = 0; i < strength - 2; i++)
+        //triangles = new int[outlineLength * (strength - 2) * 6];
+        triangles = new int[(outlineLength-1)*2*strength*3];
+        for (int i = 0; i < outlineLength - 1; i++)
         {
             for (int j = 0; j < strength - 1; j++)
             {
@@ -155,8 +150,6 @@ public class meow : MonoBehaviour{
                 triangles[6 * j + 5 + 6 * strength * i] = j + strength * (i + 1);
             }
 
-            //need to do final one differently to wrap around
-            
             triangles[6 * (strength - 1) + 6 * strength * i] = (strength - 1) + strength * i;
             triangles[6 * (strength - 1) + 1 + 6 * strength * i] = strength * i;
             triangles[6 * (strength - 1) + 2 + 6 * strength * i] = strength * (i + 1);
@@ -164,119 +157,22 @@ public class meow : MonoBehaviour{
             triangles[6 * (strength - 1) + 3 + 6 * strength * i] = (strength - 1) + strength * i;
             triangles[6 * (strength - 1) + 4 + 6 * strength * i] = strength * (i + 1);
             triangles[6 * (strength - 1) + 5 + 6 * strength * i] = (strength - 1) + strength * (i + 1);
-            
+
         }
     }
 
-    private void Update()
-    {
+    private void Update(){
         text.text = ""+strength;
         if (Input.GetKeyDown(KeyCode.R))
         {
             //Debug.Log("doing it");
             strength++;
-            createOut();
+            readFile();
+            createOutline();
             wrapOutline();
             trianglesWrap();
             updateMesh();
-            //createTriangle();
-            //Debug.Log("done it?");
         }
-    }
-
-    public static void CacheItem(string url, Mesh mesh)
-    {
-        string path = Path.Combine(Application.persistentDataPath, url);
-        byte[] bytes = MeshSerializer.WriteMesh(mesh, true);
-        File.WriteAllBytes(path, bytes);
-    }
-
-    public static Mesh GetCacheItem(string url)
-    {
-        string path = Path.Combine(Application.persistentDataPath, url);
-        if (File.Exists(path) == true)
-        {
-            byte[] bytes = File.ReadAllBytes(path);
-            return MeshSerializer.ReadMesh(bytes);
-        }
-        return null;
-    }
-
-    void createTriangle(){
-        float angle0 = 0;
-        float angle1 = 0;
-        vertices = new Vector3[strength * (strength-1)];
-        triangles = new int[strength * (strength-2) * 6];
-
-        for (int i = 0; i < strength-1; i++)
-        {
-            angle1 += 3.14f / strength;
-            for (int j = 0; j < strength; j++)
-            {
-                angle0 += 2 * 3.14f / strength;
-                vertices[strength * i + j] = new Vector3(Mathf.Sin(angle1) * Mathf.Sin(angle0) * 10, Mathf.Cos(angle1) * 10, Mathf.Sin(angle1)* Mathf.Cos(angle0) * 10);
-            }
-            angle0 = 0;
-
-        }
-
-        for (int i=0;i<strength-2; i++)
-        {
-            for (int j=0; j<strength-1; j++)
-            {
-                triangles[6 * j +     6 * strength * i] = j + strength * i;
-                triangles[6 * j + 1 + 6 * strength * i] = j + 1 + strength * i;
-                triangles[6 * j + 2 + 6 * strength * i] = j + 1 + strength * (i + 1);
-               
-                triangles[6 * j + 3 + 6 * strength * i] = j + strength * i;
-                triangles[6 * j + 4 + 6 * strength * i] = j + 1 + strength * (i + 1);
-                triangles[6 * j + 5 + 6 * strength * i] = j + strength * (i + 1);
-            }
-
-            //need to do final one differently to wrap around
-            
-            triangles[6 * (strength-1) + 6 * strength * i] = (strength - 1) + strength * i;
-            triangles[6 * (strength - 1) + 1 + 6 * strength * i] = strength * i;
-            triangles[6 * (strength - 1) + 2 + 6 * strength * i] = strength * (i + 1);
-
-            triangles[6 * (strength - 1) + 3 + 6 * strength * i] = (strength - 1) + strength * i;
-            triangles[6 * (strength - 1) + 4 + 6 * strength * i] = strength * (i + 1);
-            triangles[6 * (strength - 1) + 5 + 6 * strength * i] = (strength - 1) + strength * (i + 1);
-            
-        }
-        
-        /*
-        vertices = new Vector3[strength*2];
-        triangles = new int[strength*3*2];
-        for (int i = 0; i < strength; i++)
-        {
-            vertices[2*i] = new Vector3(Mathf.Sin(angle)*10, Mathf.Cos(angle)*10, 0);
-            vertices[2*i+1] = new Vector3(Mathf.Sin(angle)*10, Mathf.Cos(angle)*10, 2);
-            angle += 2*Mathf.PI/strength;
-        }
-        for (int i=1; i<strength; i++)
-        {
-            triangles[6 * (i - 1)] = 2 * (i - 1);
-            triangles[6 * (i - 1) + 1] = 2 * (i - 1) + 3;
-            triangles[6 * (i - 1) + 2] = 2 * (i - 1) + 2;
-
-            triangles[6 * (i - 1) + 3] = 2 * (i - 1);
-            triangles[6 * (i - 1) + 4] = 2 * (i - 1) + 1;
-            triangles[6 * (i - 1) + 5] = 2 * (i - 1) + 3;
-        }*/
-        /*
-        vertices = new Vector3[]
-        {
-            new Vector3(0, 0, 0),
-            new Vector3(0, 0, 1),
-            new Vector3(1, 0, 0)
-        };
-        */
-        /*
-        triangles = new int[]{
-            0, 1, 2
-        };
-        */
     }
 
     void updateMesh(){
