@@ -162,7 +162,11 @@ public class TimeSlice
 
     public void Create2DArray()
     {
-        String temp = "";
+        //temp is for debugging purposes
+        //String temp = "";
+        int dilRow = cellsPerRow / dilution;
+        int dilCol = cellsPerCol / dilution;
+
         Debug.Log(cellsPerCol/dilution + ", " + cellsPerRow/dilution + ", " + gridSize);
         coordinates = new Coordinate[cellsPerRow / dilution, cellsPerCol / dilution];
         //read file for all entries, putting them into an array
@@ -170,14 +174,14 @@ public class TimeSlice
         {
             var content = reader.ReadLine();
             reader.ReadLine();
-            for (int i = 0; i < cellsPerRow / dilution; i++)
+            for (int i = 0; i < dilRow; i++)
             {
                 //dilute
                 for (int k = 0; k < (dilution-1) * cellsPerCol; k++)
                 {
                     reader.ReadLine();
                 }
-                for (int j = 0; j < cellsPerCol / dilution; j++)
+                for (int j = 0; j < dilCol; j++)
                 {
                     //dilute
                     for (int k = 0; k < dilution-1; k++)
@@ -194,17 +198,17 @@ public class TimeSlice
                     if (density == 0)
                     {
                         coordinates[i, j] = null;
-                        temp += "0, ";
+                        //temp += "0, ";
                     }
                     else
                     {
                         coordinates[i, j] = new Coordinate(pressure, temperature);
-                        temp += "1, ";
+                        //temp += "1, ";
                         //temp += density+", ";
                     }
                 }
-                Debug.Log(temp);
-                temp = "";
+                //Debug.Log(temp);
+                //temp = "";
             }
         }
         createOutline();

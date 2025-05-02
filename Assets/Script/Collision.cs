@@ -121,11 +121,10 @@ public class Collision
             timeSlices.Add(newSlice);
             /*if (File.Exists(fullPath))
             {
-<<<<<<< HEAD
                 Debug.Log("Found: " + fileName);
                 TimeSlice newSlice = new TimeSlice(fullPath);
                 timeSlices.Add(newSlice);
-=======
+
                 if (skippedCount == (pTimeSliceDilation - 1))
                 {
                     newSlice = new TimeSlice(fullPath, pCoordinateDilation, cellsPerCol, cellsPerRow, gridSize, colIgnoreA, colIgnoreB, rowIgnoreB);
@@ -136,7 +135,6 @@ public class Collision
                     skippedCount++;
                 }
 
->>>>>>> frontend
             }
             else
             {
