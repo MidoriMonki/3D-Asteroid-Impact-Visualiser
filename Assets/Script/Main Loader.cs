@@ -210,8 +210,6 @@ public class MainLoader : MonoBehaviour
                 }
             }
         }*/
-        Debug.Log("Guess it worked ayy");
-        foundStatus.text = "Done bro.";
     }
 
 

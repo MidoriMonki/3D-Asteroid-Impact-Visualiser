@@ -17,26 +17,6 @@ public class meow : MonoBehaviour
     public Text text;
     public int outlineLength;
     public Gradient gradient;
-<<<<<<< HEAD
-
-    private List<Vector3> verticeList = new List<Vector3>();
-
-    void Start(){
-        mesh = new Mesh();
-        mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
-        GetComponent<MeshFilter>().mesh = mesh;
-    }
-
-    void readFile(){
-        string fileName = $"csv/All_mesh_data_at_timestep_4.csv";
-        verticeList = new List<Vector3>();
-        if (File.Exists(fileName)){
-            Debug.Log("Found: " + fileName);
-            using (var reader = new StreamReader(fileName)){
-                reader.ReadLine();
-                var content = reader.ReadLine();
-                while (reader.EndOfStream == false){
-=======
 
     private List<Vector3> verticeList = new List<Vector3>();
 
@@ -60,7 +40,6 @@ public class meow : MonoBehaviour
                 var content = reader.ReadLine();
                 while (reader.EndOfStream == false)
                 {
->>>>>>> frontend
                     var splitRow = content.Split(',');
                     Debug.Log(content);
                     float x = ParseFloat(splitRow[0]);
@@ -68,7 +47,6 @@ public class meow : MonoBehaviour
                     verticeList.Add(new Vector3(0, y, x));
                     content = reader.ReadLine();
                 }
-<<<<<<< HEAD
             }
             outlineLength = verticeList.Count;
         }
@@ -164,7 +142,7 @@ public class meow : MonoBehaviour
     void trianglesWrap(){
         //triangles = new int[outlineLength * (strength - 2) * 6];
         triangles = new int[(outlineLength-1)*2*strength*3];
-=======
+
             }
             outlineLength = verticeList.Count;
         }
@@ -204,12 +182,12 @@ public class meow : MonoBehaviour
             //Debug.Log(i);
             vertices[i] = root.getPosition();
             root = root.getTail();
-            if(root.getTail() == null)
+            if (root.getTail() == null)
             {
                 outlineLength = i;
             }
         }
-        Debug.Log(outlineLength);
+        //Debug.Log(outlineLength);
     }
 
     //Used for creating the outline, it's basically a linkedlist
@@ -285,7 +263,7 @@ public class meow : MonoBehaviour
     void trianglesWrap()
     {
         triangles = new int[(outlineLength - 1) * 2 * strength * 3];
->>>>>>> frontend
+
         for (int i = 0; i < outlineLength - 1; i++)
         {
             for (int j = 0; j < strength - 1; j++)
@@ -308,23 +286,6 @@ public class meow : MonoBehaviour
             triangles[6 * (strength - 1) + 5 + 6 * strength * i] = (strength - 1) + strength * (i + 1);
 
         }
-<<<<<<< HEAD
-    }
-
-    private void Update(){
-        text.text = ""+strength;
-        if (Input.GetKeyDown(KeyCode.R))
-        {
-            //Debug.Log("doing it");
-            strength++;
-            readFile();
-            createOutline();
-            wrapOutline();
-            trianglesWrap();
-            updateMesh();
-        }
-=======
->>>>>>> frontend
     }
 
     private void Update()
@@ -345,24 +306,5 @@ public class meow : MonoBehaviour
         mesh.colors = colours;
         mesh.triangles = triangles;
         mesh.RecalculateNormals();
-    }
-
-<<<<<<< HEAD
-    void OnDrawGizmos(){
-        if (drawGizmos){
-            for (int i=0;i<vertices.Length;i++){
-                Gizmos.color = gradient.Evaluate(i/(float)vertices.Length);
-=======
-    void OnDrawGizmos()
-    {
-        if (drawGizmos)
-        {
-            for (int i = 0; i < vertices.Length; i++)
-            {
-                Gizmos.color = gradient.Evaluate(i / (float)vertices.Length);
->>>>>>> frontend
-                Gizmos.DrawSphere(vertices[i], .1f);
-            }
-        }
     }
 }
