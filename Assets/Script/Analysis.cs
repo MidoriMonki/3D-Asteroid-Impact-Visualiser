@@ -69,7 +69,7 @@ public class Analysis
 
     public int findTimeSlices()
     {
-        int timestep = 0;
+        int timestep = 2;
         int count = 0;
 
         while (true)
@@ -95,8 +95,6 @@ public class Analysis
         string filePath = folderPath + "/All_mesh_data_at_timestep_0.csv";
         using (var reader = new StreamReader(filePath))
         {
-            reader.ReadLine();
-            reader.ReadLine();
             while (reader.EndOfStream == false)
             {
                 reader.ReadLine();
