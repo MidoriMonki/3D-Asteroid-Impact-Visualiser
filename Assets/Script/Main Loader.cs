@@ -7,6 +7,8 @@ using System.Linq;
 
 public class MainLoader : MonoBehaviour
 {
+    public Collision myCollision;
+
     public int timeSliceDilation = 1;
     public int coordinateDilation = 1;
     public TMPro.TMP_InputField timeSliceDilationDisplay;
@@ -16,7 +18,6 @@ public class MainLoader : MonoBehaviour
     public Button TimeSliceDown;
     public Button CoordinateUp;
     public Button CoordinateDown;
-
 
     public TMPro.TMP_Text resultTimeSlice;
     public TMPro.TMP_Text resultCoordinate;
@@ -66,19 +67,13 @@ public class MainLoader : MonoBehaviour
         int foundValue;
         if (int.TryParse(foundCoordinate.text, out foundValue))
         {
-            int result = foundValue / coordinateDilation;
+            int result = foundValue / (coordinateDilation*coordinateDilation);
             resultCoordinate.text = result.ToString();
         }
         else
         {
             resultCoordinate.text = "Invalid";
         }
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        
     }
 
     public void TimeSliceDilationUpdate()
@@ -186,7 +181,8 @@ public class MainLoader : MonoBehaviour
 
     public void LoadButtonClick()
     {
-        Collision myCollision = new Collision();
+        Analysis myAnalysis = new Analysis(fileStructure.text);
+        myCollision = new Collision(myAnalysis.findDataAmount());
         csvPath = fileStructure.text;
         myCollision.Loader(csvPath, timeSliceDilation, coordinateDilation);
         TestCollisionData(myCollision);
@@ -194,20 +190,28 @@ public class MainLoader : MonoBehaviour
 
     void TestCollisionData(Collision collision)
     {
+        /*
         foreach (var timeSlice in collision.timeSlices)
         {
             Debug.Log($"Testing TimeSlice from file: {timeSlice.filePath}");
-            foreach (var coordinate in timeSlice.coordinates2D)
+            Debug.Log(timeSlice.coordinates.GetLength(1));
+            for (int i = 0; i < timeSlice.coordinates.GetLength(0); i++)
             {
-                if (coordinate != null)
+                for (int j = 0; j < timeSlice.coordinates.GetLength(1); j++)
                 {
-                    Debug.Log($"Coordinate: x = {coordinate.x}, y = {coordinate.y}, " +
-                          $"Density = {coordinate.density}, Pressure = {coordinate.pressure}, " +
-                          $"Temperature = {coordinate.temperature}, Vel_x = {coordinate.vel_x}, Vel_y = {coordinate.vel_y}");
+                    Coordinate coordinate = timeSlice.coordinates[i, j];
+                    Debug.Log(coordinate);
+                    if (coordinate != null)
+                    {
+                        Debug.Log($"Coordinate: x = {timeSlice.gridSize * i}, y = {timeSlice.gridSize * j}, " +
+                              $"Density = {coordinate.density}, Pressure = {coordinate.pressure}, " +
+                              $"Temperature = {coordinate.temperature}, Vel_x = {coordinate.vel_x}, Vel_y = {coordinate.vel_y}");
+                    }
                 }
-                
             }
-        }
+        }*/
+        Debug.Log("Guess it worked ayy");
+        foundStatus.text = "Done bro.";
     }
 
 
