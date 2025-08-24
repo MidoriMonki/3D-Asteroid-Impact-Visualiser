@@ -2,27 +2,39 @@ using UnityEngine;
 
 public class LinkedList
 {
-
     private LinkedList head;
-    //private float distanceH;
     private LinkedList tail;
+    private Coordinate node;
 
-    //private float distanceT;
-    private Vector3 position;
-
-
-    public LinkedList(LinkedList head, LinkedList tail, Vector3 position)
+    public LinkedList(LinkedList head, LinkedList tail, Coordinate node)
     {
         this.head = head;
         this.tail = tail;
-        this.position = position;
+        this.node = node;
     }
 
-    public LinkedList(Vector3 position)
+    public LinkedList(Coordinate node)
     {
         head = null;
         tail = null;
-        this.position = position;
+        this.node = node;
+    }
+
+    public LinkedList reverseList()
+    {
+        if(tail != null){
+            LinkedList store = head;
+            setHead(getTail());
+            setTail(store);
+            return getHead().reverseList();
+        }
+        else
+        {
+            setTail(getHead());
+            setHead(null);
+            return this;
+        }
+        
     }
 
     public LinkedList getHead(){
@@ -32,7 +44,11 @@ public class LinkedList
         return tail;
     }
     public Vector3 getPosition(){
-        return position;
+        return node.pos;
+    }
+    public float getParameter()
+    {
+        return node.parameter;
     }
 
     public void setHead(LinkedList head){
@@ -41,8 +57,12 @@ public class LinkedList
     public void setTail(LinkedList tail){
         this.tail = tail;
     }
-    public void setPosition(Vector3 position){
-        this.position = position;
+    public void setNode(Coordinate node){
+        this.node = node;
+    }
+    public void setPosition(Vector3 pos)
+    {
+        node.pos = pos;
     }
 
     public LinkedList getRoot(){
@@ -52,21 +72,33 @@ public class LinkedList
             return head.getRoot();
         }
     }
-    
-/*
-    public LinkedList insert(Vector3 position){
-        if(distanceT == 0 || Vector3.Distance(position, this.position) < distanceT){
-            LinkedList temp = new LinkedList(this, this.tail, position);
-            this.tail.setHead(temp);
-            this.tail = temp;
+
+    public LinkedList getEnd()
+    {
+        if (tail == null)
+        {
+            return this;
         }
-        else if(distanceT == 0 || Vector3.Distance(position, this.position) < distanceT){
-            LinkedList temp = new LinkedList(this, this.tail, position);
-            this.tail.setHead(temp);
-            this.tail = temp;
+        else
+        {
+            return tail.getEnd();
         }
     }
-*/
+
+    /*
+        public LinkedList insert(Vector3 position){
+            if(distanceT == 0 || Vector3.Distance(position, this.position) < distanceT){
+                LinkedList temp = new LinkedList(this, this.tail, position);
+                this.tail.setHead(temp);
+                this.tail = temp;
+            }
+            else if(distanceT == 0 || Vector3.Distance(position, this.position) < distanceT){
+                LinkedList temp = new LinkedList(this, this.tail, position);
+                this.tail.setHead(temp);
+                this.tail = temp;
+            }
+        }
+    */
 
 }
 
