@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.IO;
+using System;
 using System.Linq;
 
 public class Analysis
@@ -74,8 +75,9 @@ public class Analysis
 
         while (true)
         {
-            string fileName = $"All_mesh_data_at_timestep_{timestep}.csv";
-            string fullPath = Path.Combine(folderPath, fileName);
+            string[] fileNames = Directory.GetFiles(folderPath);
+            Array.Sort(fileNames);
+            string fullPath = fileNames[0];
 
 
             if (File.Exists(fullPath))
@@ -92,7 +94,9 @@ public class Analysis
     public int findDataAmount()
     {
         int count = 0;
-        string filePath = folderPath + "/All_mesh_data_at_timestep_0.csv";
+        string[] fileNames = Directory.GetFiles(folderPath);
+        Array.Sort(fileNames);
+        string filePath = fileNames[0];
         using (var reader = new StreamReader(filePath))
         {
             while (reader.EndOfStream == false)

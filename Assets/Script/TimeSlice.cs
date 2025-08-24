@@ -5,106 +5,60 @@ using System.Linq;
 using Unity.Burst;
 using System;
 using Unity.Collections;
+using Unity.Jobs;
+using System.Threading.Tasks;
+using UnityEditor;
+using System.Threading;
 
 public class TimeSlice
 {
-    public Coordinate[,] coordinates;
-    public List<Vector3> verticeList = new List<Vector3>();
+    public float?[,] coordinates;
+    public List<Coordinate> outlineList;
+    public Vector3[] vertices;
+    private Color[] outlineColours;
+
+
+    private static float? minParameter;
+    private static float? maxParameter;
+
     public int dilution;
+    private string timestep;
     public int outlineLength;
     public string filePath;
     public int gridSize = 0;
-    public int cellsPerRow;
-    public int cellsPerCol;
+    public int rows;
+    public int cols;
     public int ignoreColA;
     public int ignoreColB;
     public int ignoreRowB;
+    public float grid;
+    private int dirNum = 0;
+    private List<Color> colourList;
 
-    public TimeSlice(string pFilePath, int pDilution, int cellsPerCol, int cellsPerRow, int gridSize, int ignoreColA, int ignoreColB, int ignoreRowB)
-    {
+    private Vector3[] interiorVertices;
+    private Color[] colours;
+    private List<int> triangles;
+    private string parameter;
+
+    private CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
+
+
+    public Gradient gradient = new Gradient();
+    private List<Vector2> Edges;
+
+    public TimeSlice(string pFilePath, string timestep, int pDilution, int rows, int cols, int gridSize, int ignoreColA, int ignoreColB, int ignoreRowB, string parameter){
         this.dilution = pDilution;
+        this.timestep = timestep;
         this.filePath = pFilePath;
-        this.cellsPerRow = cellsPerRow;
-        this.cellsPerCol = cellsPerCol;
+        this.cols = cols;
+        this.rows = rows;
         this.gridSize = gridSize;
         this.ignoreColA = ignoreColA;
         this.ignoreColB = ignoreColB;
+        this.parameter = parameter;
         this.ignoreRowB = ignoreRowB;
-        //createOutline();
-        //this.Create1DArray();
     }
-    /*
-    public struct Data
-    {
-        public NativeArray<Coordinate> coordinates;
-        public int dilution;
-        public string filePath;
-        public float gridSize;
-        public int rows;
-        public int cols;
-
-        public Data(TimeSlice t)
-        {
-            this.dilution = t.dilution;
-            this.filePath = t.filePath;
-            this.rows = t.rows;
-            cols = t.cols;
-            gridSize = t.gridSize;
-            coordinates = new NativeArray<Coordinate>();
-            //coordinates = new Coordinate[(int)cols / dilution, (int)rows / dilution];
-            //createOutline();
-            //this.Create1DArray();
-        }
-
-        public void Create2DArray(int fileSize)
-        {
-            //put entries into 2D array
-            //UnmanagedMemoryStream
-            using (var reader = new UnmanagedMemoryStream(filePath, )) 
-            {
-                int colDil = (int)cols / dilution;
-                int rowDil = (int)rows / dilution;
-                int jDil = (dilution - 1);
-                int iDil = (jDil) * (rows / (jDil + 1));
-
-                Debug.Log("colDil: " + colDil + "\nrowDil: " + rowDil);
-                //coordinates = new Coordinate[colDil, rowDil];
-
-                var content = "0,0,0";//reader.ReadLine();
-                //reader.ReadLine();
-                //read file for all entries, putting them into an array
-                for (int i = 0; i < colDil; i++)
-                {
-                    //dilute
-                    for (int k = 0; k < iDil; k++)
-                    {
-                        //reader.ReadLine();
-                    }
-                    for (int j = 0; j < rowDil; j++)
-                    {
-                        //dilute
-                        for (int k = 0; k < jDil; k++)
-                        {
-                            //reader.ReadLine();
-                        }
-                        //content = reader.ReadLine();
-                        var splitRow = content.Split(',');
-                        float x = ParseFloat(splitRow[0]);
-                        float y = ParseFloat(splitRow[1]);
-                        float density = ParseFloat(splitRow[2]);
-                        //float pressure = ParseFloat(splitRow[3]);
-                        //float temperature = ParseFloat(splitRow[4]);
-                        //float vel_x = ParseFloat(splitRow[5]);
-                        //float vel_y = ParseFloat(splitRow[6]);
-                        coordinates[i*rowDil + j] = (new Coordinate(x, y, density));
-                    }
-                }
-                //reader.Close();
-                reader.Dispose();
-                coordinates.Dispose();
-            }
-        }
-        */
+   
     public float ParseFloat(string value)
     {
         float result;
@@ -116,360 +70,408 @@ public class TimeSlice
         return result;
     }
 
-    static bool RowHasData(string[] cells)
+    async public Task setUpSlice(int dirNum, Gradient g) {
+        this.dirNum = dirNum;
+        gradient = g;
+        await Task.Run(() =>
+        {
+            Create2DArrayTask();
+            createOutlineArray();
+            createOutlineMesh();
+        });
+        saveInteriorMesh();
+        //part one done
+    }
+
+
+    async public Task saveOutlineTask()
     {
-        return cells.Any(x => x.Length > 0);
+        await Task.Run(() => {
+            //smooth it out
+            for (int i = 0; i < rows/dilution/12; i++)
+            {
+                //curveFitting(0.33f);
+                //curveFitting(-0.34f);
+            }
+        });
+        saveOutlineMesh();
+        //part two done
     }
 
 
 
-    public void createOutline()
-    {
-        //get the now updated number of cols and rows
-        int cols = coordinates.GetLength(0);
-        int rows = coordinates.GetLength(1);
-        //rows = (int)rows / dilution;
-        int grid = 1;
-        for (int i = 0; i < cols; i++)
+    public void Create2DArrayTask(){
+        int dilRows = rows/dilution;
+        int dilCols = cols/dilution;
+        int densityColumn = 0;
+        int temperatureColumn = 0;
+        int count = 0;
+
+        using var reader = new StreamReader(filePath);
+        /* Explaining how the following code segment works:
+            * - Ignore the stretched colums in the data, these are points outside of the simulation
+            * - Repeat the following for all colums that will survive the diluting:
+            * - Dilute following colums
+            * - Apply dilution to our colum rows
+            * - Save those points that weren't diluted
+            * - Keep a count of how far we have travelled the col, don't want to overstep into rows to be ignored (stretched rows)
+            * - Read the file until we reach the next colum, repeat the process (This next colum will be the first to be diluted)
+            */
+        Debug.Log("rows/y: " + dilRows + ", cols/x: " + dilCols);
+        grid = 1000 / (float)((dilRows + (2 * dilCols)) / 2);
+        //grid given as average pixel size, so all x + y divided by 2.
+        coordinates = new float?[dilRows, dilCols];
+        outlineList = new List<Coordinate>();
+
+        string[] columnLegend = reader.ReadLine().Split(",");
+        for (int i = 0; i < columnLegend.Length; i++){
+            if (columnLegend[i].Split(" ")[0].Equals("Density")){
+                densityColumn = i;
+            }else if (columnLegend[i].Split(" ")[0].Equals(parameter)){
+                temperatureColumn = i;
+            }
+        }
+        //Go down each column, as the first dimension is y
+        var content = reader.ReadLine();
+
+
+        //reader.ReadLine();
+        for (int i = 0; i < dilCols; i++)
         {
-            for (int j = 0; j < rows; j++)
+            //dilute, skip columns by dilution-1 (go to the right by dilution-1 times)
+            for (int k = 0; k < (dilution - 1) * rows; k++)
             {
-                if(coordinates[i, j] != null)
+                reader.ReadLine();
+            }
+            for (int j = 0; j < dilRows; j++)
+            {
+                //dilute, skip rows by dilution-1 (go down dilution-1 times)
+                for (int k = 0; k < (dilution - 1); k++)
                 {
-                    if (i > 0 && coordinates[i - 1, j] == null)
+                    reader.ReadLine();
+                }
+                //now start actually creating a point
+                content = reader.ReadLine();
+                //Debug.Log(j + ", " + i);
+                var splitRow = content.Split(",");
+                float density = ParseFloat(splitRow[densityColumn]);
+                //check if point is empty
+                if (density == 0.0f)
+                {
+                    coordinates[j, i] = null;
+                    count++;
+                }
+                else
+                {
+                    float temperature = ParseFloat(splitRow[temperatureColumn]);
+                    //read first line to find a starting reference point for temps if not set yet
+                    if (minParameter == null)
                     {
-                        verticeList.Add(new Vector3(0, grid * j, grid * i));
+                        minParameter = temperature;
+                        maxParameter = temperature;
+                    }else if (temperature > maxParameter)
+                    {
+                        maxParameter = temperature;
                     }
-                    else if (i < cols - 1 && coordinates[i + 1, j] == null)
+                    else if(temperature<minParameter)
                     {
-                        verticeList.Add(new Vector3(0, grid * j, grid * i));
+                        minParameter = temperature;
                     }
-                    else if (j < rows - 1 && coordinates[i, j + 1] == null)
+                    coordinates[j, i] = temperature;
+                }
+            }
+        }
+        //Debug.Log("percentage of empty: " + (float)count * 100 / (dilRows * dilCols) + "%");
+    }
+    
+
+    public void createOutlineArray(){
+        //get the now updated number of cols and rows
+        rows = coordinates.GetLength(0);
+        cols = coordinates.GetLength(1);
+        triangles = new List<int>();
+        interiorVertices = new Vector3[rows*cols];
+        colours = new Color[rows*cols];
+        colourList = new List<Color>();
+        //set up bounds for parameter
+        float b = Mathf.Abs((float)maxParameter - (float)minParameter);
+        float a = (float)minParameter * -1;
+        //Go down column for each point, then go to the right and start from the top again
+        //Given this, define each point as their column (j, repeat row times for each y position in the column),
+        //and their row (i * row, repeat for each x position so each column) added together.
+        //A point can then be defined as such: (j*rows)+i
+        for (int i = 0; i < cols; i++){
+            for (int j = 0; j < rows; j++){
+                //For each point
+                interiorVertices[(i*rows)+j] = new Vector3(0, grid * j, grid * i);
+                //This outline assumes coordinates that touch an empty space horizontally or vertically (not diagonally)
+                if (coordinates[j, i] != null){
+                    //colour for interior
+                    float c = (float)coordinates[j, i];
+                    colours[(i * rows) + j] = gradient.Evaluate((c + a) / b);
+                    if (i > 0 && coordinates[j, i-1] == null){
+                        //one to the right is null
+                        outlineList.Add(new Coordinate(new Vector3(0, grid * j, grid * i), c));
+                    }else if (i < cols - 1 && coordinates[j, i + 1] == null)
                     {
-                        verticeList.Add(new Vector3(0, grid * j, grid * i));
+                        //one to the left is null
+                        outlineList.Add(new Coordinate(new Vector3(0, grid * j, grid * i), c));
                     }
-                    else if (j > 0 && coordinates[i, j - 1] == null)
+                    else if(j < rows - 1 && coordinates[j + 1, i] == null)
                     {
-                        verticeList.Add(new Vector3(0, grid * j, grid * i));
+                        //one above is null
+                        outlineList.Add(new Coordinate(new Vector3(0, grid * j, grid * i), c));
+                    }
+                    else if(j > 0 && coordinates[j - 1, i] == null)
+                    {
+                        //one below is null
+                        //first check above, then left above, then finally left
+                        if (i > 0 && coordinates[j-1, i + 1] != null)
+                        {
+                            //if above isn't null, ignore cause that's the other node's job now.
+                        }else if (i > 0 && coordinates[j - 1, i + 1] != null)
+                        {
+                            //one above and left isn't null
+                            triangles.Add((i * rows) + j); //our point
+                            triangles.Add(((i + 1) * rows) + j); //left point
+                            triangles.Add(((i + 1) * rows) + j + 1); //point above and left
+                        }
+                        else if(i > 0 && coordinates[j - 1, i + 1] != null)
+                        {
+                            //left isn't null
+                            triangles.Add((i * rows) + j); //our point
+                            triangles.Add(((i + 1) * rows) + j); //left point
+                            triangles.Add(((i + 1) * rows) + j + 1); //point above and left
+                        }
+                        outlineList.Add(new Coordinate(new Vector3(0, grid * j, grid * i), c));
+                    }
+                    else
+                    {
+                        //found point that is not an outline, so form connections to next point and above point
+                        if (i > 0 && j > 0)
+                        {
+                            triangles.Add((i * rows) + j); //our point
+                            triangles.Add(((i - 1) * rows) + j); //right point
+                            triangles.Add((i * rows) + j - 1); //point above
+
+                            triangles.Add(((i - 1) * rows) + j - 1); //left and up point
+                            triangles.Add((i * rows) + j - 1); //point above
+                            triangles.Add(((i - 1) * rows) + j); //right point
+                        }
+                        //triangles = new int[(outlineLength - 1) * strength * 6];
+                        //do clockwise, we know that up and left are safe, this does lead to missing points on right and down
                     }
                 }
             }
         }
         coordinates = null;
-
+        /*
+            Debug.Log(outlineList.Count);
+            interiorVertices[0] = new Vector3(0, 0, 0);
+            interiorVertices[1] = new Vector3(0, grid * rows, 0);
+            interiorVertices[2] = new Vector3(0, 0, grid * cols);
+            interiorVertices[3] = new Vector3(0, grid * rows, grid * cols);
+        */
         //Debug.Log("Done :)");
+
     }
 
-    public void Create2DArray()
+
+    private void createOutlineMesh(){
+        List<Vector3> verticeList = new List<Vector3>();
+        List<Color> colourList = new List<Color>();
+        outlineLength = outlineList.Count;
+        //set up bounds for parameter
+        float b = Mathf.Abs((float)maxParameter - (float)minParameter);
+        float a = (float)minParameter * -1;
+
+        while (outlineList.Count > 0){
+            LinkedList root = new LinkedList(outlineList[(int)Mathf.Floor(outlineLength / 2)]);
+            outlineList.RemoveAt((int)Mathf.Floor(outlineLength / 2));
+            Mhead(root, false);
+            root = root.getRoot();
+
+            while (root.getTail() != null){
+                verticeList.Add(root.getPosition());
+                colourList.Add(gradient.Evaluate((root.getParameter()+a)/b));
+                root = root.getTail();
+            }
+
+            verticeList[verticeList.Count-1] = new Vector3(10f, verticeList[verticeList.Count - 1].y, verticeList[verticeList.Count - 1].z);
+            outlineLength = outlineList.Count;
+        }
+        vertices = verticeList.ToArray();
+        outlineColours = colourList.ToArray();
+        outlineLength = vertices.Length;
+    }
+
+
+
+
+    //Given a scenario where head always goes first, if head and tail are neighbours, but head finds
+    //that it has a closer neighbour, there is no point in tail then trying to validate if they are neighbours
+
+    void Mhead(LinkedList list, bool done)
     {
-        //temp is for debugging purposes
-        //String temp = "";
-        int dilRow = cellsPerRow / dilution;
-        int dilCol = cellsPerCol / dilution;
+        //this distance variable and the one in tail needs to be dynamic, so bigger distances for higher dilution
+        float distance = 2 * Mathf.Sqrt(2 * (grid) * (grid));
+        int nextNodeIndex = -1;
 
-        Debug.Log(cellsPerCol/dilution + ", " + cellsPerRow/dilution + ", " + gridSize);
-        coordinates = new Coordinate[cellsPerRow / dilution, cellsPerCol / dilution];
-        //read file for all entries, putting them into an array
-        using (var reader = new StreamReader(filePath))
+        //Go through all points, find closest one
+        for (int i = 0; i < outlineList.Count; i++)
         {
-            var content = reader.ReadLine();
-            reader.ReadLine();
-            for (int i = 0; i < dilRow; i++)
+            if (Vector3.Distance(outlineList[i].pos, list.getPosition()) < distance)
             {
-                //dilute
-                for (int k = 0; k < (dilution-1) * cellsPerCol; k++)
-                {
-                    reader.ReadLine();
-                }
-                for (int j = 0; j < dilCol; j++)
-                {
-                    //dilute
-                    for (int k = 0; k < dilution-1; k++)
-                    {
-                        reader.ReadLine();
-                    }
-                    content = reader.ReadLine();
-                    var splitRow = content.Split(',');
-                    float density = ParseFloat(splitRow[2]);
-                    float pressure = ParseFloat(splitRow[3]);
-                    float temperature = ParseFloat(splitRow[4]);
-                    //float vel_x = ParseFloat(splitRow[5]);
-                    //float vel_y = ParseFloat(splitRow[6]);
-                    if (density == 0)
-                    {
-                        coordinates[i, j] = null;
-                        //temp += "0, ";
-                    }
-                    else
-                    {
-                        coordinates[i, j] = new Coordinate(pressure, temperature);
-                        //temp += "1, ";
-                        //temp += density+", ";
-                    }
-                }
-                //Debug.Log(temp);
-                //temp = "";
+                distance = Vector3.Distance(outlineList[i].pos, list.getPosition());
+                nextNodeIndex = i;
             }
         }
-        createOutline();
-    }
-        /* --------
-         public void Create2DArray(){
-             /*int cellsPerRow = -1;// = this.countRows();
-             int cellsPerCol = 0;// = this.countCols();
-             fileSize = -1;
-
-             //find gridsize, rows, and cols
-             using (var reader = new StreamReader(filePath)){
-                 int content = 0;
-                 int tempContent = 0;
-                 //read file until first x changes by gridsize for the first time
-                 reader.ReadLine();
-                 reader.ReadLine();
-                 while(content == 0.0f){
-                     content = (int)ParseFloat(reader.ReadLine().Split(',')[0]);
-                     cellsPerRow++;
-                     fileSize++;
-                 }
-                 tempContent = content;
-                 while(!(tempContent > content + gridSize)){
-                     content = tempContent;
-                     tempContent = (int)ParseFloat(reader.ReadLine().Split(',')[0]);
-                     fileSize++;
-                 }
-                 cellsPerCol = fileSize / cellsPerRow;
-                 reader.Close();
-             }*/
-        /* --------
-         //int rows = 0;
-         //int cols = 0;
-         //put entries into 2D array
-         using (var reader = new StreamReader(filePath))
-         {
-             //int colDil = (int)cols/dilution;
-             //int rowDil = (int)rows/dilution;
-             //int jDil = (dilution-1);
-             //int iDil = (jDil) * (rows/(jDil+1));
-             //String temp = "";
-             //Debug.Log("colDil: " + colDil + "\nrowDil: " + rowDil);
-             //coordinates = new Coordinate[100, 100];
-             //coordinates = new Coordinate[1350, 1620];
-             coordinates = new Coordinate[450, 540];
-             var content = reader.ReadLine();
-             reader.ReadLine();
-             //read file for all entries, putting them into an array
-             /*
-             for (int i = 0; i < colDil; i++){
-                 //dilute
-                 for (int k = 0; k < iDil; k++){
-                     reader.ReadLine();
-                 }
-                 for (int j = 0; j < rowDil; j++){
-                     //dilute
-                     for (int k = 0; k < jDil; k++){
-                         reader.ReadLine();
-                     }
-                     content = reader.ReadLine();
-                     var splitRow = content.Split(',');
-                     float density = ParseFloat(splitRow[2]);
-                     float pressure = ParseFloat(splitRow[3]);
-                     float temperature = ParseFloat(splitRow[4]);
-                     //float vel_x = ParseFloat(splitRow[5]);
-                     //float vel_y = ParseFloat(splitRow[6]);
-                     if (density == 0)
-                     {
-                         coordinates[i, j] = null;
-                         temp += "0, ";
-                     }
-                     else
-                     {
-                         coordinates[i, j] = new Coordinate(density, pressure, temperature);
-                         temp += "1, ";
-                         //temp += density+", ";
-                     }
-                 }
-                 Debug.Log(temp);
-                 temp = "";
-             }*/
-
-        /* Explaining how the following code segment works:
-         * - Ignore the stretched colums in the data, these are points outside of the simulation
-         * - Repeat the following for all colums that will survive the diluting:
-         * - Dilute following colums
-         * - Apply dilution to our colum rows
-         * - Save those points that weren't diluted
-         * - Keep a count of how far we have travelled the col, don't want to overstep into rows to be ignored (stretched rows)
-         * - Read the file until we reach the next colum, repeat the process (This next colum will be the first to be diluted)
-        */
-        /* --------
-        //First, get rid of the ones to ignore (far most left colums)
-        //number of colums to ignore on left side * ( cells per col + cells per col to be ignored )
-        Debug.Log(cellsPerCol + ", " + cellsPerRow + ", " + ignoreColA + ", " + ignoreRowB);
-        for(int i = 0; i < ignoreColA * (cellsPerCol + ignoreRowB); i++){
-            reader.ReadLine();
-        }
-        String balls = "";
-        //repeat for each undiluted col
-        for (int j = 0; j < cellsPerRow / dilution; j++){
-            //Apply dilution to cols (skip cols)
-            //May have to ensure no overstepping i'm not too sure...
-            for (int k = 0; k < (cellsPerCol + ignoreRowB); k++){
-                reader.ReadLine();
-            }
-            //go through next col
-            for (int i = 0; i < cellsPerCol / dilution; i++) {
-                int count = 0; //make sure we don't overstep with diluting
-                if (count < cellsPerCol / dilution + dilution)
-                {
-                    //Dilute through the col (skip rows)
-                    for (int k = 0; k < dilution - 1; k++)
-                    {
-                        reader.ReadLine();
-                        count++;
-                    }
-                    content = reader.ReadLine();
-                    count++;
-                    var splitRow = content.Split(',');
-                    float density = ParseFloat(splitRow[2]);
-                    float pressure = ParseFloat(splitRow[3]);
-                    float temperature = ParseFloat(splitRow[4]);
-                    if (density == 0)
-                    {
-                        coordinates[j, i] = null;
-                        balls += "0,";
-                    }
-                    else
-                    {
-                        coordinates[j, i] = new Coordinate(pressure, temperature);
-                        balls += "1,";
-                    }
-                }
-                else
-                {
-                    //readfile until we reach next colum, then start over
-                    while (count < cellsPerCol + ignoreColB)
-                    {
-                        reader.ReadLine();
-                        count++;
-                    }
-                }
-            }
-            Debug.Log(balls);
-            balls = "";
-        }
-        reader.Close();
-        createOutline();
-    }
-    }
-    -------- */
-
-        /*
-        public void Create1DArray()
+        //found
+        if (nextNodeIndex != -1)
         {
-            this.coordinates1D = new List<Coordinate>();
-            using (var reader = new StreamReader(filePath))
+            /*if (list.getTail() != null && Vector3.Distance(list.getEnd().getPosition(), list.getPosition()) <= distance && !list.getEnd().getPosition().Equals(list.getPosition()) )
             {
-                reader.ReadLine();
-                reader.ReadLine();
-                while (reader.EndOfStream == false)
-                {
-                    for (int i = 0; i < (dilution - 1) ; i++)
-                    {
-                        reader.ReadLine();
-                    }
-                    var content = reader.ReadLine();
-                    if (content == null) break;
-                    var splitRow = content.Split(',');
-
-                    if (RowHasData(splitRow))
-                    {
-                        // Parse values, with defaulting to 0 for missing values
-                        float x = ParseFloat(splitRow[0]);
-                        float y = ParseFloat(splitRow[1]);
-                        float density = ParseFloat(splitRow[2]);
-                        float pressure = ParseFloat(splitRow[3]);
-                        float temperature = ParseFloat(splitRow[4]);
-                        float vel_x = ParseFloat(splitRow[5]);
-                        float vel_y = ParseFloat(splitRow[6]);
-
-                        // Create new Coordinate object with parsed data
-                        Coordinate newCoordinate = new Coordinate(x, y, density, pressure, temperature, vel_x, vel_y);
-                        coordinates1D.Add(newCoordinate);
-                    }
-                }
+                //if we found that tail is our nearest neighbour
+                list.setHead(new LinkedList(null, list, list.getEnd().getPosition()));
+                Mtail(list.getEnd(), false);
+            }*/
+            list.setHead(new LinkedList(null, list, outlineList[nextNodeIndex]));
+            outlineList.RemoveAt(nextNodeIndex);
+            if (!done)
+            {
+                Mtail(list.getEnd(), false);
             }
+            else
+            {
+                Mhead(list.getRoot(), true);
+            }
+        }
+        else if (!done)
+        {
+            Mtail(list.getEnd(), true);
+        }
+    }
+
+
+
+    void Mtail(LinkedList list, bool done)
+    {
+        //this distance variable and the one in tail needs to be dynamic, so bigger distances for higher dilution
+        float distance = 2 * Mathf.Sqrt(2 * (grid) * (grid));
+        int nextNodeIndex = -1;
+
+        //Go through all points, find closest one
+        for (int i = 0; i < outlineList.Count; i++)
+        {
+            if (Vector3.Distance(outlineList[i].pos, list.getPosition()) < distance)
+            {
+                distance = Vector3.Distance(outlineList[i].pos, list.getPosition());
+                nextNodeIndex = i;
+            }
+        }
+        //found
+        if (nextNodeIndex != -1)
+        { //make sure it's not a first order neighbour
+            /*
+            if (list.getHead().getHead() != null && Vector3.Distance(list.getRoot().getPosition(), list.getPosition()) <= distance && !list.getRoot().getPosition().Equals(list.getPosition()) )
+            {
+                //if we found that head is our nearest neighbour
+                list.setTail(new LinkedList(list, null, list.getRoot().getPosition()));
+                Mhead(list.getRoot(), false);
+            }*/
+            list.setTail(new LinkedList(list, null, outlineList[nextNodeIndex]));
+            outlineList.RemoveAt(nextNodeIndex);
+            //outlineList.RemoveAt(head);
+            if (!done)
+            {
+                Mhead(list.getRoot(), false);
+            }
+            else
+            {
+                Mtail(list.getEnd(), true);
+            }
+        }
+        else if(!done)
+        {
+            Mhead(list.getRoot(), true);
+        }
+    }
+   
+
+    private void curveFitting(float scale)
+    {
+        Vector3[] verticesF = new Vector3[outlineLength];
+
+        for (int i = 0; i < outlineLength - 1; i++)
+        {
+            if (i != 0 && i != outlineLength - 1)
+            {
+                if(vertices[i+1].x == 0f && vertices[i - 1].x == 0f && vertices[i].x == 0f)
+                {
+                    //add the two neighbours with weights, should be inverse of number of neighbours
+                    float z = vertices[i].z + scale * (0.5f * ((vertices[i - 1].z - vertices[i].z) + (vertices[i + 1].z - vertices[i].z)));
+                    float y = vertices[i].y + scale * (0.5f * ((vertices[i - 1].y - vertices[i].y) + (vertices[i + 1].y - vertices[i].y)));
+                    vertices[i] = new Vector3(vertices[i].x, y, z);
+                }
+                //verticesF[i] = new Vector3(0, (verticesF[i - 1].y + vertices[Mathf.FloorToInt((i + 1) / 2)].y) / 2, (verticesF[i - 1].z + vertices[Mathf.FloorToInt((i + 1) / 2)].z) / 2);
+                //verticesF[i] += new Vector3(0, (verticesF[i - 1].y + vertices[Mathf.FloorToInt((i + 1) / 2)].y) / 2, (verticesF[i - 1].z + vertices[Mathf.FloorToInt((i + 1) / 2)].z) / 2);
+            }
+            else
+            {
+                verticesF[0] = vertices[0];
+            }
+
+        }
+        //vertices = verticesF;
+
+    }
+
+
+    public void saveOutlineMesh()
+    {
+        Mesh mm = new Mesh();
+        mm.vertices = vertices;
+        mm.colors = outlineColours;
+        AssetDatabase.CreateAsset(mm, $"Assets/Resources/MESHES/RESULTS_{dirNum}/{timestep}.asset");
+        //Debug.Log("Saved new timestamp");
+        /*if (!File.Exists("Assets/Resources/MESHES/timestamp_0.asset"))
+        {
+            Debug.Log("Created new outline 'meow'");
+            AssetDatabase.CreateAsset(mm, "Assets/Resources/MESHES/timestamp_0.asset");
+        }
+        else
+        {
+            Debug.Log("Saved outline 'meow'");
+            AssetDatabase.SaveAssets();
+            AssetDatabase.SaveAssetIfDirty(mm);
         }*/
+    }
 
 
 
-
-        /*
-        public float ParseFloat(string value)
+    public void saveInteriorMesh()
+    {
+        Mesh mm = new Mesh();
+        mm.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+        mm.vertices = interiorVertices;
+        mm.triangles = triangles.ToArray();
+        mm.colors = colours;
+        mm.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+        AssetDatabase.CreateAsset(mm, $"Assets/Resources/MESHES/INTERIOR_{dirNum}/{timestep}.asset");
+        triangles = null;
+        interiorVertices = null;
+        //Debug.Log("Saved new timestamp");
+        /*if (!File.Exists("Assets/Resources/MESHES/timestamp_0.asset"))
         {
-            float result;
-            if (!float.TryParse(value, out result))
-            {
-                //Debug.LogWarning($"Invalid float format: '{value}'. Defaulting to 0.");
-                result = 0f;  // Default to 0 if parsing fails
-            }
-            return result;
+            Debug.Log("Created new outline 'meow'");
+            AssetDatabase.CreateAsset(mm, "Assets/Resources/MESHES/timestamp_0.asset");
         }
-
-        static bool RowHasData(string[] cells)
+        else
         {
-            return cells.Any(x => x.Length > 0);
-        }
-        */
-        /*
-        public int countRows()
-        {
-            int rowCount = 1;
-            Coordinate heldCoordinate = coordinates1D[0];
-            for (int i = 0; i < coordinates1D.Count(); i++)
-            {
-                Coordinate iterateCoordinate = coordinates1D[i];
-                if (heldCoordinate.x < iterateCoordinate.x)
-                {
-                    heldCoordinate = iterateCoordinate;
-                    rowCount++;
-                }
-
-            }
-            return rowCount;
-        }
-
-        public int countCols()
-        {
-            int maxFound = 0;
-            int colCount = 1;
-            Coordinate heldCoordinate = coordinates1D[0];
-
-
-
-            for (int i = 1; i < coordinates1D.Count; i++) 
-            {
-                Coordinate iterateCoordinate = coordinates1D[i];
-
-                if (heldCoordinate.x < iterateCoordinate.x)
-                {
-                    if (colCount > maxFound)
-                    {
-                        maxFound = colCount;
-                    }
-                    colCount = 1; 
-                }
-                else
-                {
-                    colCount++;
-                }
-                heldCoordinate = iterateCoordinate;
-            }
-
-            if (colCount > maxFound)
-            {
-                maxFound = colCount;
-            }
-            return maxFound;
+            Debug.Log("Saved outline 'meow'");
+            AssetDatabase.SaveAssets();
+            AssetDatabase.SaveAssetIfDirty(mm);
         }*/
+    }
+
 }
-

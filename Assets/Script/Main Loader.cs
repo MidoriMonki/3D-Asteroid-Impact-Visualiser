@@ -4,6 +4,7 @@ using UnityEngine.UI;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 
 public class MainLoader : MonoBehaviour
 {
@@ -18,6 +19,7 @@ public class MainLoader : MonoBehaviour
     public Button TimeSliceDown;
     public Button CoordinateUp;
     public Button CoordinateDown;
+    public Gradient gradient;
 
     public TMPro.TMP_Text resultTimeSlice;
     public TMPro.TMP_Text resultCoordinate;
@@ -179,12 +181,12 @@ public class MainLoader : MonoBehaviour
         }   
     }
 
-    public void LoadButtonClick()
+    public async void LoadButtonClick()
     {
         Analysis myAnalysis = new Analysis(fileStructure.text);
-        myCollision = new Collision(myAnalysis.findDataAmount());
+        myCollision = new Collision(myAnalysis.findDataAmount(), gradient);
         csvPath = fileStructure.text;
-        myCollision.Loader(csvPath, timeSliceDilation, coordinateDilation);
+        await myCollision.Loader(csvPath, timeSliceDilation, coordinateDilation);
         TestCollisionData(myCollision);
     }
 
