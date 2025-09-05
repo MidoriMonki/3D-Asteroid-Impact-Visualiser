@@ -18,6 +18,8 @@ public class meow : MonoBehaviour
     public int outlineLength;
     public Gradient gradient;
 
+    public GameObject UIface;
+
     private List<Vector3> verticeList = new List<Vector3>();
 
     void Start()
@@ -292,6 +294,7 @@ public class meow : MonoBehaviour
     {
         if (Input.GetKeyDown(KeyCode.R))
         {
+            UIface.SetActive(false);
             createOutline();
             wrapOutline();
             trianglesWrap();
