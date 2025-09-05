@@ -188,31 +188,10 @@ public class MainLoader : MonoBehaviour
         csvPath = fileStructure.text;
         await myCollision.Loader(csvPath, timeSliceDilation, coordinateDilation);
         TestCollisionData(myCollision);
+
     }
 
-    void TestCollisionData(Collision collision)
-    {
-        /*
-        foreach (var timeSlice in collision.timeSlices)
-        {
-            Debug.Log($"Testing TimeSlice from file: {timeSlice.filePath}");
-            Debug.Log(timeSlice.coordinates.GetLength(1));
-            for (int i = 0; i < timeSlice.coordinates.GetLength(0); i++)
-            {
-                for (int j = 0; j < timeSlice.coordinates.GetLength(1); j++)
-                {
-                    Coordinate coordinate = timeSlice.coordinates[i, j];
-                    Debug.Log(coordinate);
-                    if (coordinate != null)
-                    {
-                        Debug.Log($"Coordinate: x = {timeSlice.gridSize * i}, y = {timeSlice.gridSize * j}, " +
-                              $"Density = {coordinate.density}, Pressure = {coordinate.pressure}, " +
-                              $"Temperature = {coordinate.temperature}, Vel_x = {coordinate.vel_x}, Vel_y = {coordinate.vel_y}");
-                    }
-                }
-            }
-        }*/
-    }
+
 
 
 

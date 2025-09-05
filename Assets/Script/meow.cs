@@ -26,6 +26,9 @@ public class meow : MonoBehaviour
     public int outlineLength;
     public Gradient gradient;
     private int counter = 0;
+    public GameObject UIface;
+
+>>>>>>> backend
     private List<Vector3> verticeList = new List<Vector3>();
     private float gridSize;
     private int dilution;
@@ -118,6 +121,10 @@ public class meow : MonoBehaviour
             outlineLength = vertices.Length;
 
             mesh = new Mesh();
+
+            UIface.SetActive(false);
+            //createOutline();
+
             wrapOutline();
             trianglesWrap();
             mesh.vertices = vertices;
