@@ -28,7 +28,6 @@ public class meow : MonoBehaviour
     private int counter = 0;
     public GameObject UIface;
 
->>>>>>> backend
     private List<Vector3> verticeList = new List<Vector3>();
     private float gridSize;
     private int dilution;

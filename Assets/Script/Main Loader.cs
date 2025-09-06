@@ -187,7 +187,7 @@ public class MainLoader : MonoBehaviour
         myCollision = new Collision(myAnalysis.findDataAmount(), gradient);
         csvPath = fileStructure.text;
         await myCollision.Loader(csvPath, timeSliceDilation, coordinateDilation);
-        TestCollisionData(myCollision);
+        //TestCollisionData(myCollision);
 
     }
 
