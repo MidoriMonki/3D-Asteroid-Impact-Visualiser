@@ -39,12 +39,12 @@ public class meow : MonoBehaviour
     private string[] fileNames;
     private int whichFile = 0;
 
-    void Start()
+    public void InitMeshes()
     {
-        if (mainCamera != null)
-        {
-            mainCamera.backgroundColor = new Color32(0xD2, 0xE3, 0xF3, 0xFF); // light blue on initial load
-        }
+        //if (mainCamera != null)
+        //{
+        //    mainCamera.backgroundColor = new Color32(0xD2, 0xE3, 0xF3, 0xFF); // light blue on initial load
+        //}
         if (Directory.Exists("Assets/Resources/MESHES")){
 
             //Find the interior
@@ -100,6 +100,11 @@ public class meow : MonoBehaviour
         }
     }
 
+    void OnEnable()
+    {
+        InitMeshes();
+    }
+
     private void Update()
     {
 
@@ -126,11 +131,11 @@ public class meow : MonoBehaviour
 
             mesh = new Mesh();
 
-            UIface.SetActive(false);
-            if (mainCamera != null)
-            {
-                mainCamera.backgroundColor = new Color(0f, 0f, 0.2f); // RGB 0,0,0.2 = dark navy
-            }
+            //UIface.SetActive(false);
+            //if (mainCamera != null)
+            //{
+            //   mainCamera.backgroundColor = new Color(0f, 0f, 0.2f); // RGB 0,0,0.2 = dark navy
+            //}
 
             //createOutline();
 

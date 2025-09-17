@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem; // New Input System
 
 public class CameraBehaviour : MonoBehaviour
 {
@@ -7,41 +8,74 @@ public class CameraBehaviour : MonoBehaviour
     [SerializeField] private Vector3 orbitCenter = new Vector3(0, 800, 0);
 
     [Header("Zoom")]
-    [SerializeField] private float zoomSpeed = 300.0f;
+    [SerializeField] private float zoomSpeed = 30000.0f;
 
-    [Header("Keybindings")]
-    [SerializeField] private KeyCode frontKey = KeyCode.W;
-    [SerializeField] private KeyCode backKey = KeyCode.S;
-    [SerializeField] private KeyCode leftKey = KeyCode.A;
-    [SerializeField] private KeyCode rightKey = KeyCode.D;
+    [Header("Pan Settings")]
+    [SerializeField] private float panSpeed = 300f; 
+
+    private Vector2 lastMousePosition;
+    private bool isPanning = false;
 
     private void FixedUpdate()
     {
         float delta = orbitSpeed * Time.fixedDeltaTime;
+        var keyboard = Keyboard.current;
+        if (keyboard == null) return;
 
-        // Orbit horizontally around Y-axis (left/right)
-        if (Input.GetKey(leftKey))
+        // Orbit horizontally 
+        if (keyboard.aKey.isPressed)
             transform.RotateAround(orbitCenter, Vector3.up, delta);
 
-        if (Input.GetKey(rightKey))
+        if (keyboard.dKey.isPressed)
             transform.RotateAround(orbitCenter, Vector3.up, -delta);
 
-        // Orbit vertically around local X-axis (up/down)
-        if (Input.GetKey(frontKey))
+        // Orbit vertically 
+        if (keyboard.wKey.isPressed)
             transform.RotateAround(orbitCenter, transform.right, delta);
 
-        if (Input.GetKey(backKey))
+        if (keyboard.sKey.isPressed)
             transform.RotateAround(orbitCenter, transform.right, -delta);
     }
 
     private void LateUpdate()
     {
-        // Zoom in/out along current forward direction
-        float scroll = Input.GetAxis("Mouse ScrollWheel");
-        transform.Translate(Vector3.forward * scroll * zoomSpeed * Time.deltaTime, Space.Self);
+        var mouse = Mouse.current;
+        if (mouse == null) return;
+
+        // zoom code:
+        float scroll = mouse.scroll.ReadValue().y;
+        if (Mathf.Abs(scroll) > 0.01f)
+        {
+            Vector3 dir = (transform.position - orbitCenter).normalized; // vector from planet to camera
+            transform.position += dir * scroll * zoomSpeed * Time.deltaTime;
+        }
+
+        // panning code
+        if (mouse.leftButton.isPressed)
+        {
+            Vector2 currentPos = mouse.position.ReadValue();
+
+            if (!isPanning)
+            {
+                isPanning = true;
+                lastMousePosition = currentPos;
+            }
+            else
+            {
+                Vector2 delta = currentPos - lastMousePosition;
+                lastMousePosition = currentPos;
+
+                Vector3 panMovement = (-transform.right * delta.x - transform.up * delta.y) * panSpeed * Time.deltaTime;
+
+                transform.position += panMovement;
+            }
+        }
+        else
+        {
+            isPanning = false;
+        }
     }
 
-    // Debug visual for orbit center
     private void OnDrawGizmosSelected()
     {
         Gizmos.color = Color.green;
