@@ -5,6 +5,7 @@ public class UIManager : MonoBehaviour
     public GameObject openingScreen;    // Canvas 1
     public GameObject fileLoaderScreen; // Canvas 2
     public GameObject controllerScreen; // Canvas 3
+    public GameObject hiddenScreen;
     public Camera mainCamera;           
     public meow controllerRenderer;
 
@@ -12,6 +13,7 @@ public class UIManager : MonoBehaviour
     {
         ShowOpening(); // Start on opening screen
         controllerRenderer.enabled = false;
+        hiddenScreen.SetActive(false);
     }
 
     public void ShowOpening()
@@ -38,7 +40,7 @@ public class UIManager : MonoBehaviour
             // Light blue main menu
             mainCamera.backgroundColor = new Color32(0xD2, 0xE3, 0xF3, 0xFF);
         }
-        controllerRenderer.enabled = true;
+        controllerRenderer.enabled = false;
     }
 
     public void ShowController()
