@@ -33,15 +33,29 @@ public class Collision
     }
     public async Task Loader(string pFolderPath, int pTimeSliceDilation, int pCoordinateDilation)
     {
-        await Task.Run(() =>
-        {
+        await Task.Run(() =>{
             folderPath = pFolderPath;
             int timestep = 0;
             int skippedCount = 0;
             TimeSlice newSlice;
 
             string[] fileNames = Directory.GetFiles(pFolderPath);
-            Array.Sort(fileNames);
+            //sorting by numeric value goddamn, who would have thought something so simple would be so complicated?
+            //Okay so assume all file names are exactly the same except for the index/numerical part WHICH THEY END WITH
+            //Find starting string
+            string prefix = "";
+            string ss = fileNames[0].Split("/")[fileNames[0].Split("/").Length - 1].Split(".")[0];
+            for (int k = 0; k < ss.Length; k++)
+            {
+                if (!char.IsDigit(ss[k]))
+                {
+                    prefix += ss[k];
+                }
+            }
+            //now we know where to split as we known length of prefix to numbers
+            fileNames = fileNames.OrderBy(s =>
+                int.Parse(s.Split("/")[s.Split("/").Length - 1].Split(".")[0].Substring(prefix.Length))
+            ).ToArray();
             
 
             string fFullPath = fileNames[0];
@@ -150,14 +164,15 @@ public class Collision
             {
                 //string fileName = $"All_mesh_data_at_timestep_{timestep}.csv";
                 string fullPath = fileNames[i];
+                string[] parameters = {"Pressure", "Temperature"};
 
-                newSlice = new TimeSlice(fullPath, ""+ i, pCoordinateDilation, rows, cols, gridSize, colIgnoreA, colIgnoreB, rowIgnoreB, "Pressure");
+                newSlice = new TimeSlice(fullPath, ""+ i, pCoordinateDilation, rows, cols, gridSize, colIgnoreA, colIgnoreB, rowIgnoreB, parameters);
                 if (File.Exists(fullPath))
                 {
                     if (skippedCount == (pTimeSliceDilation - 1))
                     {
-                        //Debug.Log("Index " + pp + ": " + fullPath);
-                        newSlice = new TimeSlice(fullPath, ""+ i, pCoordinateDilation, rows, cols, gridSize, colIgnoreA, colIgnoreB, rowIgnoreB, "Pressure");
+                        Debug.Log("Index " + pp + ": " + fullPath);
+                        newSlice = new TimeSlice(fullPath, ""+ i, pCoordinateDilation, rows, cols, gridSize, colIgnoreA, colIgnoreB, rowIgnoreB, parameters);
                         timeSlices.Add(newSlice);
                         skippedCount = 0;
                         pp++;
@@ -216,6 +231,14 @@ public class Collision
             filesCompletionStatus++;
             Debug.Log("Saving all outlines " + filesCompletionStatus + " completed out of " + fileNumber);
         }
+        filesCompletionStatus = 0;
+        foreach (TimeSlice t in timeSlices)
+        {
+            await t.updateGlobal();
+            filesCompletionStatus++;
+            Debug.Log("Applying global parameter bounds... " + filesCompletionStatus + " completed out of " + fileNumber);
+        }
+         
         Debug.Log("Total slices loaded: " + timeSlices.Count);
 
     }
