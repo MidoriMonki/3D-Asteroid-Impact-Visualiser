@@ -33,6 +33,7 @@ public class Collision
     }
     public async Task Loader(string pFolderPath, int pTimeSliceDilation, int pCoordinateDilation)
     {
+        /* BELOW DOESNT WORK BECAUSE OF / VS \
         await Task.Run(() =>{
             folderPath = pFolderPath;
             int timestep = 0;
@@ -56,7 +57,39 @@ public class Collision
             fileNames = fileNames.OrderBy(s =>
                 int.Parse(s.Split("/")[s.Split("/").Length - 1].Split(".")[0].Substring(prefix.Length))
             ).ToArray();
-            
+            */
+        await Task.Run(() => {
+            folderPath = pFolderPath;
+            int timestep = 0;
+            int skippedCount = 0;
+            TimeSlice newSlice;
+
+            string[] fileNames = Directory.GetFiles(pFolderPath);
+            //sorting by numeric value goddamn, who would have thought something so simple would be so complicated?
+            //Okay so assume all file names are exactly the same except for the index/numerical part WHICH THEY END WITH
+            //Find starting string
+            string prefix = "";
+            string ss = Path.GetFileNameWithoutExtension(fileNames[0]);
+            for (int k = 0; k < ss.Length; k++)
+            {
+                if (!char.IsDigit(ss[k]))
+                {
+                    prefix += ss[k];
+                }
+            }
+            //now we know where to split as we known length of prefix to numbers
+            fileNames = fileNames.OrderBy(s =>
+            {
+                string name = Path.GetFileNameWithoutExtension(s);
+                string numberPart = name.Substring(prefix.Length);
+                int number;
+                if (!int.TryParse(numberPart, out number))
+                {
+                    number = 0; // default if parsing fails
+                }
+                return number;
+            }).ToArray();
+
 
             string fFullPath = fileNames[0];
 
