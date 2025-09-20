@@ -4,7 +4,11 @@
 [Bb]uild/
 [Bb]uilds/
 [Ll]ogs/
+[Rr]esources/
+MESHES/
 Assets/AssetStoreTools*
+
+.DS_Store
 
 # Visual Studio cache directory
 .vs/
@@ -35,5 +39,3 @@ sysinfo.txt
 # Builds
 *.apk
 *.unitypackage
-
-Assets/Resources/MESHES/

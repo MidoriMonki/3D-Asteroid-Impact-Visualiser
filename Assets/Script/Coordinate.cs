@@ -10,9 +10,9 @@ public class Coordinate
     //public float density;
     //public float pressure;
     public Vector3 pos;
-    public float parameter;
+    public float?[] parameter;
 
-    public Coordinate(/*float pX, float pY, float pDensity,*/ Vector3 pos, float parameter /*, float pVel_x, float pVel_y*/)
+    public Coordinate(/*float pX, float pY, float pDensity,*/ Vector3 pos, float?[] parameter /*, float pVel_x, float pVel_y*/)
     {
         //this.x = pX;
         //this.y = pY;

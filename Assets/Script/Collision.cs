@@ -31,86 +31,47 @@ public class Collision
     {
         timeSlices.Add(slice);
     }
-    public async Task Loader(string pFolderPath, int pTimeSliceDilation, int pCoordinateDilation)
+    public async Task Loader(string pFolderPath, int pTimeSliceDilation, int pCoordinateDilation, int singleIndex = -1)
     {
-        await Task.Run(() =>
-        {
+        await Task.Run(() => {
             folderPath = pFolderPath;
-            int timestep = 0;
-            int skippedCount = 0;
             TimeSlice newSlice;
 
-            string[] fileNames = Directory.GetFiles(pFolderPath);
-            Array.Sort(fileNames);
-            
+            // Get and sort files numerically (only csv)
+            string[] fileNames = Directory.GetFiles(pFolderPath, "*.csv");
+            if (fileNames == null || fileNames.Length == 0) return;
 
+            // determine prefix (non-digit prefix)
+            string prefix = "";
+            string ss = Path.GetFileNameWithoutExtension(fileNames[0]);
+            for (int k = 0; k < ss.Length; k++)
+            {
+                if (!char.IsDigit(ss[k]))
+                    prefix += ss[k];
+            }
+            fileNames = fileNames.OrderBy(s =>
+            {
+                string name = Path.GetFileNameWithoutExtension(s);
+                string numberPart = name.Length > prefix.Length ? name.Substring(prefix.Length) : "";
+                int number;
+                return int.TryParse(numberPart, out number) ? number : 0;
+            }).ToArray();
+
+            // Read grid info from the first file (keep original behavior)
             string fFullPath = fileNames[0];
-
-            int rows = 0;// = this.countRows();
-            int cols = -1;// = this.countCols(); //was set to -2?
-            int colIgnoreA = 0;
-            int colIgnoreB = 0;
-            int rowIgnoreA = 0;
-            int rowIgnoreB = 0;
-            int gridSize = 0;
-
+            int rows = 0, cols = -1, colIgnoreA = 0, colIgnoreB = 0, rowIgnoreA = 0, rowIgnoreB = 0, gridSize = 0;
             if (File.Exists(fFullPath))
             {
-                //find gridsize, rows, and cols, algorithm assumes at least 3 rows and 3 cols (I think anyway)
                 using (var reader = new StreamReader(fFullPath))
                 {
-                    /* We need to read the file and determine which column represents which value
-                     * Read each column, do this by reading first line and splitting
-                     * Here is the format:
-                     * 
-                     *  and empty space is ignored
-                     *  split all column names by a space, the first part is the name, second is the unit
-                     */
-                    int content = 0;
-                    int tempContent = 0;
-                    int xColumn = 0;
-
                     string[] columnLegend = reader.ReadLine().Split(",");
-                    for(int i = 0; i < columnLegend.Length; i++)
-                    {
-                        if(columnLegend[i].Split(" ")[0].Equals("x"))
-                        {
-                            xColumn = i;
-                        }
-                    }
-                    //Just printing stuff for testing
-                        string storeCols = "";
-                        for (int i = 0; i < columnLegend.Length; i++)
-                        {
-                            storeCols += columnLegend[i].Split(" ")[0] + " ";
-                        }
-                        Debug.Log(storeCols);
-                        storeCols = "";
-                        for (int i = 0; i < columnLegend.Length; i++)
-                        {
-                            if(columnLegend[i].Split(" ").Length > 1)
-                            {
-                                storeCols += columnLegend[i].Split(" ")[1] + " ";
-                            }
-                        }
-                        Debug.Log(storeCols);
+                    int xColumn = Array.FindIndex(columnLegend, c => c.Split(" ")[0] == "x");
 
-                    //set initial x position, find when change happens to determine grid size
                     string[] tempCheck = reader.ReadLine().Split(",");
                     int initX = (int)ParseFloat(tempCheck[xColumn]);
-                    content = initX;
+                    int content = initX;
 
-                    
-                    //ignore extra row if it exists
-                    bool extraRow = true;
-                    foreach(string item in tempCheck)
-                    {
-                        if (!item.Equals("0"))
-                        {
-                            extraRow = false;
-                            //Debug.Log("no extra row");
-                        }
-                    }
+                    bool extraRow = tempCheck.All(item => item == "0");
                     if (extraRow)
                     {
                         tempCheck = reader.ReadLine().Split(",");
@@ -118,107 +79,104 @@ public class Collision
                         content = initX;
                         rows--;
                     }
-                    else
-                    {
-                        //rows+=2;
-                    }
-                    
-                    while (content == initX)
+
+                    while (content == initX && !reader.EndOfStream)
                     {
                         content = (int)ParseFloat(reader.ReadLine().Split(",")[xColumn]);
                         rows++;
                         cols++;
                     }
 
-                    gridSize = content- initX;
+                    gridSize = content - initX;
                     while (!reader.EndOfStream)
                     {
                         reader.ReadLine();
                         cols++;
                     }
-                    //cellsPerRow--;
-                    cols /= rows;
-                    reader.Close();
+                    if (rows != 0)
+                        cols /= Math.Max(1, rows);
                 }
-
-                //newSlice = new TimeSlice(fFullPath, pCoordinateDilation, fileSize, cols, rows, gridSize);
-                //timeSlices.Add(newSlice);
             }
-            timestep = 0;
-            int pp = 0;
-            for(int i=0;i<fileNames.Length;i++)
-            {
-                //string fileName = $"All_mesh_data_at_timestep_{timestep}.csv";
-                string fullPath = fileNames[i];
 
-                newSlice = new TimeSlice(fullPath, ""+ i, pCoordinateDilation, rows, cols, gridSize, colIgnoreA, colIgnoreB, rowIgnoreB, "Pressure");
-                if (File.Exists(fullPath))
+            // --- Single-index branch: only include that specific file (by sorted index) ---
+            if (singleIndex >= 0)
+            {
+                // clamp to valid range
+                int idx = Mathf.Clamp(singleIndex, 0, fileNames.Length - 1);
+                string singlePath = fileNames[idx];
+                if (File.Exists(singlePath))
                 {
-                    if (skippedCount == (pTimeSliceDilation - 1))
-                    {
-                        //Debug.Log("Index " + pp + ": " + fullPath);
-                        newSlice = new TimeSlice(fullPath, ""+ i, pCoordinateDilation, rows, cols, gridSize, colIgnoreA, colIgnoreB, rowIgnoreB, "Pressure");
-                        timeSlices.Add(newSlice);
-                        skippedCount = 0;
-                        pp++;
-                    }
-                    else
-                    {
-                        skippedCount++;
-                    }
+                    string[] parameters = { "Pressure", "Temperature" };
+                    newSlice = new TimeSlice(singlePath, idx.ToString(), pCoordinateDilation, rows, cols, gridSize,
+                                             colIgnoreA, colIgnoreB, rowIgnoreB, parameters);
+                    timeSlices.Add(newSlice);
+                    Debug.Log($"Loaded single slice index {idx}: {singlePath}");
                 }
-                else
+            }
+            else
+            {
+                // --- Sampling logic: include 0 then every 'step' ---
+                int step = Mathf.Max(1, pTimeSliceDilation);
+
+                for (int i = 0; i < fileNames.Length; i += step)
                 {
-                    //Debug.Log("No file found :(");
+                    string fullPath = fileNames[i];
+                    if (!File.Exists(fullPath)) continue;
+
+                    string[] parameters = { "Pressure", "Temperature" };
+                    newSlice = new TimeSlice(fullPath, i.ToString(), pCoordinateDilation, rows, cols, gridSize,
+                                             colIgnoreA, colIgnoreB, rowIgnoreB, parameters);
+
+                    timeSlices.Add(newSlice);
+                    Debug.Log($"Loaded slice index {i}: {fullPath}");
                 }
             }
         });
 
-        //Set up Directory stuff
-        //fhegyufgyuehufi34i
+        // rest of your existing post-processing (resource folders, setUpSlice, saveOutlineTask, updateGlobal) unchanged...
         int dirNumber = 0;
         if (!Directory.Exists("Assets/Resources"))
-        {
             AssetDatabase.CreateFolder("Assets", "Resources");
-        }
         if (!Directory.Exists("Assets/Resources/MESHES"))
-        {
             AssetDatabase.CreateFolder("Assets/Resources", "MESHES");
-        }
+
         while (Directory.Exists($"Assets/Resources/MESHES/RESULTS_{dirNumber}"))
-        {
             AssetDatabase.DeleteAsset($"Assets/Resources/MESHES/RESULTS_{dirNumber}");
-            //dirNumber++;
-        }
         while (Directory.Exists($"Assets/Resources/MESHES/INTERIOR_{dirNumber}"))
-        {
             AssetDatabase.DeleteAsset($"Assets/Resources/MESHES/INTERIOR_{dirNumber}");
-            //dirNumber++;
-        }
+
         AssetDatabase.CreateFolder("Assets/Resources/MESHES", $"RESULTS_{dirNumber}");
         AssetDatabase.CreateFolder("Assets/Resources/MESHES", $"INTERIOR_{dirNumber}");
 
-
+        // Process time slices
         filesCompletionStatus = 0;
         fileNumber = timeSlices.Count;
         foreach (TimeSlice t in timeSlices)
         {
-            //t.Create2DArray();
-            //await t.Create2DArrayTask();
             await t.setUpSlice(dirNumber, gradient);
             filesCompletionStatus++;
-            Debug.Log("TimeSlice "+filesCompletionStatus+" completed out of "+fileNumber);
+            Debug.Log($"TimeSlice {filesCompletionStatus} completed out of {fileNumber}");
         }
+
         filesCompletionStatus = 0;
         foreach (TimeSlice t in timeSlices)
         {
             await t.saveOutlineTask();
             filesCompletionStatus++;
-            Debug.Log("Saving all outlines " + filesCompletionStatus + " completed out of " + fileNumber);
+            Debug.Log($"Saving outlines {filesCompletionStatus} / {fileNumber}");
         }
-        Debug.Log("Total slices loaded: " + timeSlices.Count);
 
+        filesCompletionStatus = 0;
+        foreach (TimeSlice t in timeSlices)
+        {
+            await t.updateGlobal();
+            filesCompletionStatus++;
+            Debug.Log($"Applying global bounds {filesCompletionStatus} / {fileNumber}");
+        }
+
+        Debug.Log($"Total slices loaded: {timeSlices.Count}");
     }
+
 
     public float ParseFloat(string value)
     {

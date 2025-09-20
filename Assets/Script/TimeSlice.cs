@@ -12,14 +12,14 @@ using System.Threading;
 
 public class TimeSlice
 {
-    public float?[,] coordinates;
+    public float?[,][] coordinates;
     public List<Coordinate> outlineList;
     public Vector3[] vertices;
     private Color[] outlineColours;
 
 
-    private static float? minParameter;
-    private static float? maxParameter;
+    private static float?[] minParameter;
+    private static float?[] maxParameter;
 
     public int dilution;
     private string timestep;
@@ -38,15 +38,16 @@ public class TimeSlice
     private Vector3[] interiorVertices;
     private Color[] colours;
     private List<int> triangles;
-    private string parameter;
+    private string[] parameter;
 
     private CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
 
+    private List<int> outlineCorrespondingIndex;
 
     public Gradient gradient = new Gradient();
     private List<Vector2> Edges;
 
-    public TimeSlice(string pFilePath, string timestep, int pDilution, int rows, int cols, int gridSize, int ignoreColA, int ignoreColB, int ignoreRowB, string parameter){
+    public TimeSlice(string pFilePath, string timestep, int pDilution, int rows, int cols, int gridSize, int ignoreColA, int ignoreColB, int ignoreRowB, string[] parameter){
         this.dilution = pDilution;
         this.timestep = timestep;
         this.filePath = pFilePath;
@@ -59,11 +60,9 @@ public class TimeSlice
         this.ignoreRowB = ignoreRowB;
     }
    
-    public float ParseFloat(string value)
-    {
+    public float ParseFloat(string value){
         float result;
-        if (!float.TryParse(value, out result))
-        {
+        if (!float.TryParse(value, out result)){
             //Debug.LogWarning($"Invalid float format: '{value}'. Defaulting to 0.");
             result = 0f;  // Default to 0 if parsing fails
         }
@@ -73,11 +72,15 @@ public class TimeSlice
     async public Task setUpSlice(int dirNum, Gradient g) {
         this.dirNum = dirNum;
         gradient = g;
-        await Task.Run(() =>
-        {
+        await Task.Run(() =>{
             Create2DArrayTask();
             createOutlineArray();
             createOutlineMesh();
+            //smooth it out
+            for (int i = 0; i < rows/dilution/12; i++){
+                curveFitting(0.33f);
+                curveFitting(-0.34f);
+            }
         });
         saveInteriorMesh();
         //part one done
@@ -87,24 +90,69 @@ public class TimeSlice
     async public Task saveOutlineTask()
     {
         await Task.Run(() => {
-            //smooth it out
-            for (int i = 0; i < rows/dilution/12; i++)
-            {
-                //curveFitting(0.33f);
-                //curveFitting(-0.34f);
-            }
+
         });
         saveOutlineMesh();
+        saveTextFile();
         //part two done
     }
 
+    async public Task updateGlobal()
+    {
+        Mesh mesh = Resources.Load<Mesh>($"MESHES/INTERIOR_{dirNum}/{timestep}");
+        Color[] col = mesh.colors;
+        await Task.Run(() => {
+            col = updateMeshGlobal(col);
+        });
+        mesh.colors = col;
+        saveInteriorMesh(mesh);
+        saveTextFile();
+        //part three final part done
+    }
 
 
     public void Create2DArrayTask(){
-        int dilRows = rows/dilution;
-        int dilCols = cols/dilution;
+        //Ensure correction dilution
+        int remainderA = rows%dilution;
+        int remainderB = cols%dilution;
+
+        int dilRows = Mathf.FloorToInt(rows/dilution);
+        int dilCols = Mathf.FloorToInt(cols/dilution);
+
+        ignoreRowB = remainderA;
+
+
+        /*
+        if (remainderA > 0){
+            dilRows-=dilution;
+        }
+        if (remainderB > 0){
+            dilCols-=dilution;
+        }
+        */
+
+        /*
+        while(remainderA != 0 || remainderB != 0){
+            int ratio = (int)rows/cols;
+            if (remainderA != 0){
+                rows - remainderA;
+
+            }
+        }
+        }
+        int dilRows = (int)Math.Ceiling((float)rows/dilution);
+        int dilCols = (int)Math.Ceiling((float)cols/dilution);
+
+        if (remainderA > 0){
+            dilRows-=dilution;
+        }
+        if (remainderB > 0){
+            dilCols-=dilution;
+        }
+        */
+
         int densityColumn = 0;
-        int temperatureColumn = 0;
+        int[] parameterColumn = new int[0];
         int count = 0;
 
         using var reader = new StreamReader(filePath);
@@ -120,15 +168,24 @@ public class TimeSlice
         Debug.Log("rows/y: " + dilRows + ", cols/x: " + dilCols);
         grid = 1000 / (float)((dilRows + (2 * dilCols)) / 2);
         //grid given as average pixel size, so all x + y divided by 2.
-        coordinates = new float?[dilRows, dilCols];
+        coordinates = new float?[dilRows, dilCols][];
         outlineList = new List<Coordinate>();
 
         string[] columnLegend = reader.ReadLine().Split(",");
         for (int i = 0; i < columnLegend.Length; i++){
             if (columnLegend[i].Split(" ")[0].Equals("Density")){
                 densityColumn = i;
-            }else if (columnLegend[i].Split(" ")[0].Equals(parameter)){
-                temperatureColumn = i;
+            }
+            //find all the interesting columns
+            String s = columnLegend[i].Split(" ")[0];
+            if (!s.Equals("") && !s.Equals("Density") && !s.Equals("x") && !s.Equals("y")){
+                //make new array with an one extra array
+                int[] temp = new int[parameterColumn.Length+1];
+                for(int m=0;m<parameterColumn.Length;m++){
+                    temp[m] = parameterColumn[m];
+                }
+                temp[parameterColumn.Length] = i;
+                parameterColumn = temp;
             }
         }
         //Go down each column, as the first dimension is y
@@ -163,22 +220,30 @@ public class TimeSlice
                 }
                 else
                 {
-                    float temperature = ParseFloat(splitRow[temperatureColumn]);
-                    //read first line to find a starting reference point for temps if not set yet
-                    if (minParameter == null)
-                    {
-                        minParameter = temperature;
-                        maxParameter = temperature;
-                    }else if (temperature > maxParameter)
-                    {
-                        maxParameter = temperature;
+                    float?[] para = new float?[4];
+                    for(int m=0;m<parameterColumn.Length;m++){
+                        para[m] = ParseFloat(splitRow[parameterColumn[m]]);
+                        //read first line to find a starting reference point for temps if not set yet
+                        if (minParameter == null){
+                            minParameter = new float?[4];
+                            maxParameter = new float?[4];
+                            minParameter[m] = para[m];
+                            maxParameter[m] = para[m];
+                        }else if(minParameter[m] == null){
+                            minParameter[m] = para[m];
+                            maxParameter[m] = para[m];
+                        }else if (para[m] > maxParameter[m]){
+                            maxParameter[m] = para[m];
+                        }else if(para[m]<minParameter[m]){
+                            minParameter[m] = para[m];
+                        }
                     }
-                    else if(temperature<minParameter)
-                    {
-                        minParameter = temperature;
-                    }
-                    coordinates[j, i] = temperature;
+                    coordinates[j, i] = para;
                 }
+            }
+            //dilute, skip rows by the number of remainder from cols
+            for (int k = 0; k < ignoreRowB; k++){
+                reader.ReadLine();
             }
         }
         //Debug.Log("percentage of empty: " + (float)count * 100 / (dilRows * dilCols) + "%");
@@ -193,87 +258,151 @@ public class TimeSlice
         interiorVertices = new Vector3[rows*cols];
         colours = new Color[rows*cols];
         colourList = new List<Color>();
+        outlineCorrespondingIndex = new List<int>();
+
         //set up bounds for parameter
-        float b = Mathf.Abs((float)maxParameter - (float)minParameter);
-        float a = (float)minParameter * -1;
+        //float b = Mathf.Abs((float)maxParameter - (float)minParameter);
+        //float a = (float)minParameter * -1;
+
         //Go down column for each point, then go to the right and start from the top again
         //Given this, define each point as their column (j, repeat row times for each y position in the column),
         //and their row (i * row, repeat for each x position so each column) added together.
         //A point can then be defined as such: (j*rows)+i
+
         for (int i = 0; i < cols; i++){
             for (int j = 0; j < rows; j++){
                 //For each point
                 interiorVertices[(i*rows)+j] = new Vector3(0, grid * j, grid * i);
-                //This outline assumes coordinates that touch an empty space horizontally or vertically (not diagonally)
+                //This algorithm assumes coordinates that touch an empty space horizontally or vertically (not diagonally) are outline points
                 if (coordinates[j, i] != null){
-                    //colour for interior
-                    float c = (float)coordinates[j, i];
-                    colours[(i * rows) + j] = gradient.Evaluate((c + a) / b);
-                    if (i > 0 && coordinates[j, i-1] == null){
-                        //one to the right is null
-                        outlineList.Add(new Coordinate(new Vector3(0, grid * j, grid * i), c));
-                    }else if (i < cols - 1 && coordinates[j, i + 1] == null)
-                    {
-                        //one to the left is null
-                        outlineList.Add(new Coordinate(new Vector3(0, grid * j, grid * i), c));
-                    }
-                    else if(j < rows - 1 && coordinates[j + 1, i] == null)
-                    {
-                        //one above is null
-                        outlineList.Add(new Coordinate(new Vector3(0, grid * j, grid * i), c));
-                    }
-                    else if(j > 0 && coordinates[j - 1, i] == null)
-                    {
-                        //one below is null
-                        //first check above, then left above, then finally left
-                        if (i > 0 && coordinates[j-1, i + 1] != null)
-                        {
-                            //if above isn't null, ignore cause that's the other node's job now.
-                        }else if (i > 0 && coordinates[j - 1, i + 1] != null)
-                        {
-                            //one above and left isn't null
-                            triangles.Add((i * rows) + j); //our point
-                            triangles.Add(((i + 1) * rows) + j); //left point
-                            triangles.Add(((i + 1) * rows) + j + 1); //point above and left
-                        }
-                        else if(i > 0 && coordinates[j - 1, i + 1] != null)
-                        {
-                            //left isn't null
-                            triangles.Add((i * rows) + j); //our point
-                            triangles.Add(((i + 1) * rows) + j); //left point
-                            triangles.Add(((i + 1) * rows) + j + 1); //point above and left
-                        }
-                        outlineList.Add(new Coordinate(new Vector3(0, grid * j, grid * i), c));
-                    }
-                    else
-                    {
-                        //found point that is not an outline, so form connections to next point and above point
-                        if (i > 0 && j > 0)
-                        {
-                            triangles.Add((i * rows) + j); //our point
-                            triangles.Add(((i - 1) * rows) + j); //right point
-                            triangles.Add((i * rows) + j - 1); //point above
 
-                            triangles.Add(((i - 1) * rows) + j - 1); //left and up point
-                            triangles.Add((i * rows) + j - 1); //point above
-                            triangles.Add(((i - 1) * rows) + j); //right point
+                    //testPoints.Add(new Vector3(0, grid * j, grid * i));
+
+                    //colour for interior
+                    //colours[(i * rows) + j] = gradient.Evaluate((c + a) / b);
+                    /*for(int m=0; m<parameterColumn.length;m++){
+                        if(coordinates[j, i].parameter[m] == null){
+                            c = pa
                         }
-                        //triangles = new int[(outlineLength - 1) * strength * 6];
-                        //do clockwise, we know that up and left are safe, this does lead to missing points on right and down
+                    }*/
+                    float?[] c = coordinates[j,i];
+                    colours[(i * rows) + j] = new Color(c[0]??0, c[1]??0, c[2]??0, c[3]??0);
+                    //Debug.Log(colours[(i * rows) + j]);
+
+                    /* 
+                        4 main scenarios for a outline to exist, one to the left/right/above/below is null
+                    */
+                    if (i > 0 && coordinates[j, i-1] == null){
+                            //one to the left is null
+                            //We check if the below and left-below are possible
+                            if (j > 0 && i > 0 && coordinates[j-1, i] != null && coordinates[j-1, i-1] != null){
+                                triangles.Add((i * rows) + j); //our point
+                                triangles.Add((i * rows) + j - 1); //below point
+                                triangles.Add(((i - 1) * rows) + j -1); //left-below point
+                            }
+                            outlineList.Add(new Coordinate(new Vector3(0, j, i), c));
+                    }else if (i < cols - 1 && coordinates[j, i + 1] == null) {
+                            //one to the right is null
+                            //We check if the below and right-below are possible
+                            if (j > 0 && coordinates[j-1, i+1] != null && coordinates[j-1, i] != null){
+                                triangles.Add((i * rows) + j); //our point
+                                triangles.Add(((i + 1) * rows) + j - 1); //below and right point 
+                                triangles.Add((i * rows) + j-1); //below point
+                            }
+                            //Then we check if the above and left-above are possible
+                            if (j < rows - 1 && i > 0 && coordinates[j+1, i-1] != null && coordinates[j+1, i] != null){
+                                triangles.Add((i * rows) + j); //our point
+                                triangles.Add(((i - 1) * rows) + j + 1); //above and left point 
+                                triangles.Add((i * rows) + j + 1); //above point
+
+                                triangles.Add((i * rows) + j); //our point
+                                triangles.Add(((i - 1) * rows) + j); //left point 
+                                triangles.Add(((i - 1) * rows) + j + 1); //above and left point
+                            }
+                            //Then we check if the below and left-below are possible
+                            if (j > 0 && i > 0 && coordinates[j-1, i] != null){
+                                triangles.Add((i * rows) + j); //our point
+                                triangles.Add((i * rows) + j - 1); //below point
+                                triangles.Add(((i - 1) * rows) + j); //left point
+                                
+                                if(coordinates[j-1, i-1] != null){
+                                    triangles.Add(((i - 1) * rows) + j - 1); //below and left point
+                                    triangles.Add(((i - 1) * rows) + j); //left point
+                                    triangles.Add((i * rows) + j - 1); //below point
+                                }
+                            }
+                            if(j > 0 && i > 0 && coordinates[j-1, i-1] != null){
+                                triangles.Add((i * rows) + j); //our point
+                                triangles.Add(((i - 1) * rows) + j-1); //left-below point
+                                triangles.Add(((i - 1) * rows) + j); //left point
+                            }
+                            
+                            outlineList.Add(new Coordinate(new Vector3(0, j, i), c));
+                    }else if(j < rows - 1 && coordinates[j + 1, i] == null){
+                            //one above is null
+                            //We check if the below and right-below are possible
+                            if (j > 0 && i < cols -1 && coordinates[j-1, i+1] != null && coordinates[j-1, i] != null){
+                                triangles.Add((i * rows) + j); //our point
+                                triangles.Add(((i + 1) * rows) + j - 1); //below and right point 
+                                triangles.Add((i * rows) + j-1); //below point
+
+                                triangles.Add((i * rows) + j); //our point
+                                triangles.Add(((i + 1) * rows) + j); //right point
+                                triangles.Add(((i + 1) * rows) + j - 1); //below and right point 
+                            }
+                            //Then we check if the below and left-below are possible
+                            if (j > 0 && i > 0 && coordinates[j, i-1] != null && coordinates[j-1, i-1] != null){
+                                triangles.Add((i * rows) + j); //our point
+                                triangles.Add((i * rows) + j - 1); //below point
+                                triangles.Add(((i - 1) * rows) + j); //left point
+                                if (coordinates[j-1, i-1] != null){
+                                    triangles.Add(((i - 1) * rows) + j - 1); //below and left point
+                                    triangles.Add(((i - 1) * rows) + j); //left point
+                                    triangles.Add((i * rows) + j - 1); //below point
+                                }
+                            }
+                            outlineList.Add(new Coordinate(new Vector3(0, j, i), c));
+                    }else if(j > 0 && coordinates[j - 1, i] == null){
+                            //one below is null
+                            //We check if the left-below is possible
+                            if (j > 0 && i > 0 && coordinates[j-1, i-1] != null){
+                                triangles.Add((i * rows) + j); //our point
+                                triangles.Add(((i - 1) * rows) + j -1); //left-below point
+                                triangles.Add(((i-1) * rows) + j); //below point
+                            }
+                            outlineList.Add(new Coordinate(new Vector3(0, j, i), c));
+                    }else{
+                        //found point that is not an outline, so form connections to next point (right) and below point
+                        if (i > 0 && j > 0){
+                            triangles.Add((i * rows) + j); //our point
+                            triangles.Add((i * rows) + j - 1); //below point
+                            triangles.Add(((i - 1) * rows) + j); //left point
+                            if (coordinates[j-1, i-1] != null){
+                                triangles.Add(((i - 1) * rows) + j - 1); //below and left point
+                                triangles.Add(((i - 1) * rows) + j); //left point
+                                triangles.Add((i * rows) + j - 1); //below point
+                            }
+                        }
                     }
                 }
             }
         }
-        coordinates = null;
-        /*
-            Debug.Log(outlineList.Count);
-            interiorVertices[0] = new Vector3(0, 0, 0);
-            interiorVertices[1] = new Vector3(0, grid * rows, 0);
-            interiorVertices[2] = new Vector3(0, 0, grid * cols);
-            interiorVertices[3] = new Vector3(0, grid * rows, grid * cols);
+       /* Debug.Log("begin creating tree");
+        LinkedList tree = kdtree(testPoints, 0);
+        Vector3 point = new Vector3(0, grid * 400, grid * 400);
+        Vector3?[] eight = new Vector3?[8];
+        Debug.Log("begin searching tree");
+        for(int i=0;i<1000000;i++){
+              eight = find8KNN(tree, point, eight, 0);
+        }
+        foreach (Vector3? v in eight){
+            if(v!=null){
+                Vector3 i = (Vector3)v;
+                Debug.Log(i.x+", "+i.y+", "+i.z);
+            }
+        }
         */
-        //Debug.Log("Done :)");
-
+        coordinates = null;
     }
 
 
@@ -282,8 +411,8 @@ public class TimeSlice
         List<Color> colourList = new List<Color>();
         outlineLength = outlineList.Count;
         //set up bounds for parameter
-        float b = Mathf.Abs((float)maxParameter - (float)minParameter);
-        float a = (float)minParameter * -1;
+        //float b = Mathf.Abs((float)maxParameter - (float)minParameter);
+        //float a = (float)minParameter * -1;
 
         while (outlineList.Count > 0){
             LinkedList root = new LinkedList(outlineList[(int)Mathf.Floor(outlineLength / 2)]);
@@ -291,13 +420,30 @@ public class TimeSlice
             Mhead(root, false);
             root = root.getRoot();
 
+            //reverse the list if is wrong way
+            /*if(root.getEnd().getPosition().y > root.getPosition().y){
+                root = root.reverseList();
+            }*/
+            
+            //automatically goes through each section, checking if it is facing the right way
+            //root.reverseList();
+
+
             while (root.getTail() != null){
-                verticeList.Add(root.getPosition());
-                colourList.Add(gradient.Evaluate((root.getParameter()+a)/b));
+                verticeList.Add(new Vector3(0, root.getPosition().y*grid, root.getPosition().z*grid));
+
+                float?[] c = root.getParameter();
+                colourList.Add(new Color(c[0]??0, c[1]??0, c[2]??0, c[3]??0));
+                //colourList.Add(gradient.Evaluate((root.getParameter()+a)/b));
+                outlineCorrespondingIndex.Add(((int)root.getPosition().z * rows) + (int)root.getPosition().y);
                 root = root.getTail();
             }
 
-            verticeList[verticeList.Count-1] = new Vector3(10f, verticeList[verticeList.Count - 1].y, verticeList[verticeList.Count - 1].z);
+            if (verticeList.Count > 0)
+            {
+                int last = verticeList.Count - 1;
+                verticeList[last] = new Vector3(10f, verticeList[last].y, verticeList[last].z);
+            }
             outlineLength = outlineList.Count;
         }
         vertices = verticeList.ToArray();
@@ -314,7 +460,8 @@ public class TimeSlice
     void Mhead(LinkedList list, bool done)
     {
         //this distance variable and the one in tail needs to be dynamic, so bigger distances for higher dilution
-        float distance = 2 * Mathf.Sqrt(2 * (grid) * (grid));
+        //float distance = Mathf.Sqrt(2.2f * (grid) * (grid));
+        float distance = Mathf.Sqrt(2.2f*(dilution+1));
         int nextNodeIndex = -1;
 
         //Go through all points, find closest one
@@ -329,12 +476,6 @@ public class TimeSlice
         //found
         if (nextNodeIndex != -1)
         {
-            /*if (list.getTail() != null && Vector3.Distance(list.getEnd().getPosition(), list.getPosition()) <= distance && !list.getEnd().getPosition().Equals(list.getPosition()) )
-            {
-                //if we found that tail is our nearest neighbour
-                list.setHead(new LinkedList(null, list, list.getEnd().getPosition()));
-                Mtail(list.getEnd(), false);
-            }*/
             list.setHead(new LinkedList(null, list, outlineList[nextNodeIndex]));
             outlineList.RemoveAt(nextNodeIndex);
             if (!done)
@@ -357,7 +498,8 @@ public class TimeSlice
     void Mtail(LinkedList list, bool done)
     {
         //this distance variable and the one in tail needs to be dynamic, so bigger distances for higher dilution
-        float distance = 2 * Mathf.Sqrt(2 * (grid) * (grid));
+        //float distance = Mathf.Sqrt(2.2f * (grid) * (grid));
+        float distance = Mathf.Sqrt(2.2f*(dilution+1));
         int nextNodeIndex = -1;
 
         //Go through all points, find closest one
@@ -372,13 +514,6 @@ public class TimeSlice
         //found
         if (nextNodeIndex != -1)
         { //make sure it's not a first order neighbour
-            /*
-            if (list.getHead().getHead() != null && Vector3.Distance(list.getRoot().getPosition(), list.getPosition()) <= distance && !list.getRoot().getPosition().Equals(list.getPosition()) )
-            {
-                //if we found that head is our nearest neighbour
-                list.setTail(new LinkedList(list, null, list.getRoot().getPosition()));
-                Mhead(list.getRoot(), false);
-            }*/
             list.setTail(new LinkedList(list, null, outlineList[nextNodeIndex]));
             outlineList.RemoveAt(nextNodeIndex);
             //outlineList.RemoveAt(head);
@@ -427,12 +562,30 @@ public class TimeSlice
     }
 
 
-    public void saveOutlineMesh()
-    {
+    public void saveOutlineMesh(){
         Mesh mm = new Mesh();
         mm.vertices = vertices;
+
+        float?[] a = new float?[4];
+        float?[] b = new float?[4];
+
+        for(int i=0;i<4;i++){
+            if(minParameter[i]!=null){
+                b[i] = Mathf.Abs((float)maxParameter[i] - (float)minParameter[i]);
+                a[i] = (float)minParameter[i] * -1;
+            }
+        }
+        for(int i=0;i<outlineColours.Length;i++){
+            Color c = outlineColours[i];
+            outlineColours[i] = new Color((c.r+a[0])/b[0]??0, (c.b+a[1])/b[1]??0, (c.g+a[2])/b[2]??0, (c.a+a[3])/b[3]??0);
+            //mesh.colors[i] = new Color(??0, c[1]??0, c[2]??0, c[3]??0);
+        }
+
+
         mm.colors = outlineColours;
         AssetDatabase.CreateAsset(mm, $"Assets/Resources/MESHES/RESULTS_{dirNum}/{timestep}.asset");
+
+
         //Debug.Log("Saved new timestamp");
         /*if (!File.Exists("Assets/Resources/MESHES/timestamp_0.asset"))
         {
@@ -448,9 +601,43 @@ public class TimeSlice
     }
 
 
+    public void saveTextFile(){
+        //save csv file with global info
+        string content = "";
+        try{
+            File.WriteAllText("Assets/Resources/MESHES/global.csv", content);
+        }catch(Exception e){
+            Debug.Log($"Failed to save global info: {e}");
+        }
+    }
+
+    public Color[] updateMeshGlobal(Color[] meshColours){
+        float?[] a = minParameter;
+        float?[] b = maxParameter;
+
+        float average = 0;
+        for (int i = 0; i < meshColours.Length; i++)
+        {
+            Color c = meshColours[i];
+            average += (c.g - a[1]) / (b[1] - a[1])/meshColours.Length ?? 0;
+            meshColours[i] = new Color((c.r - a[0]) / (b[0] - a[0]) ?? 0, (c.g - a[1]) / (b[1] - a[1]) ?? 0, (c.b - a[2]) / (b[2] - a[2]) ?? 0, (c.a - a[3]) / (b[3] - a[3]) ?? 0);
+            //meshColours[i] = new Color((c.r+a[0])/b[0]??0, (c.b+a[1])/b[1]??0, (c.g+a[2])/b[2]??0, (c.a+a[3])/b[3]??0);
+            //mesh.colors[i] = new Color(??0, c[1]??0, c[2]??0, c[3]??0);
+        }
+        Debug.Log(average);
+        return meshColours;
+    }
+
 
     public void saveInteriorMesh()
     {
+        //first fix up the outline points in the interior mesh
+        //to fix this, go through each item in vertices (outline vertices)
+        //then given their 
+        for(int i=0;i<vertices.Length;i++){
+            interiorVertices[outlineCorrespondingIndex[i]] = new Vector3(0, vertices[i].y, vertices[i].z);
+        }
+
         Mesh mm = new Mesh();
         mm.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
         mm.vertices = interiorVertices;
@@ -474,4 +661,157 @@ public class TimeSlice
         }*/
     }
 
+    public void saveInteriorMesh(Mesh mesh){
+
+        mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+        EditorUtility.SetDirty(mesh);
+        AssetDatabase.SaveAssets();
+        //AssetDatabase.SaveAssets(mesh, $"Assets/Resources/MESHES/INTERIOR_{dirNum}/{timestep}.asset");
+        //Debug.Log("Saved new timestamp");
+        /*if (!File.Exists("Assets/Resources/MESHES/timestamp_0.asset"))
+        {
+            Debug.Log("Created new outline 'meow'");
+            AssetDatabase.CreateAsset(mm, "Assets/Resources/MESHES/timestamp_0.asset");
+        }
+        else
+        {
+            Debug.Log("Saved outline 'meow'");
+            AssetDatabase.SaveAssets();
+            AssetDatabase.SaveAssetIfDirty(mm);
+        }*/
+    }
+
+
+
+
+
+
+
+
+
+
+    /*
+
+    private LinkedList kdtree (List<Vector3> pointList, int depth)
+    {
+        // Select axis based on depth so that axis cycles through all valid values
+        //as only 2 axis
+        int axis = depth%2;
+        List<Vector3> sortedVectors;
+        Vector3 median;
+
+        // Sort point list and choose median as pivot element, also make sure list has more than one item
+        if(depth%2 == 0){
+            sortedVectors = new List<Vector3>(pointList.OrderBy(v => v.y).ToArray<Vector3>());
+        }else{
+            sortedVectors = new List<Vector3>(pointList.OrderBy(v => v.z).ToArray<Vector3>());
+        }
+
+        median = sortedVectors[(int)Mathf.Floor(sortedVectors.Count/2)];
+        // Create node and construct subtree
+        LinkedList node = new LinkedList(new Coordinate(median, new float?[]{null, null, null, null}));
+
+        //left = head, //right = tail
+        if(pointList.Count>2){
+            node.setHead(kdtree(new List<Vector3>(sortedVectors.Take((int)Mathf.Floor(sortedVectors.Count/2)).ToArray<Vector3>()), depth+1));
+            node.setTail(kdtree(new List<Vector3>(sortedVectors.Skip((int)Mathf.Floor(sortedVectors.Count/2)).ToArray<Vector3>()), depth+1));
+        }else if(pointList.Count>1){
+            node.setHead(kdtree(new List<Vector3>(sortedVectors.Take((int)Mathf.Floor(sortedVectors.Count/2)).ToArray<Vector3>()), depth+1));
+        }
+
+        //node.leftChild := kdtree(points in pointList before median, depth+1);
+        //node.rightChild := kdtree(points in pointList after median, depth+1);
+        return node;
+    }
+
+
+
+
+
+    private Vector3?[] find8KNN(LinkedList node, Vector3 point, Vector3?[] eight, int depth){
+        int axis = depth%2;
+
+
+        //    atm an niave approach, sort of just duplicate code to check left and right side
+   
+
+        //check if point is on left (head) of our node while making sure we have a left (head)
+        //either y or z, y == 0, z == 1
+        if(node.getHead()!=null && (node.getPosition().y <= point.y && depth%2 == 0 || node.getPosition().z <= point.z && depth%2 == 1)){
+            eight = find8KNN(node.getHead(), point, eight, depth+1);
+            //check to see if we are a neighbour
+            if(Vector3.Distance(node.getPosition(), point) < Mathf.Sqrt(2.2f * (grid) * (grid))){
+                //this node is a neighbour, so now find where to add in list
+                for(int i=0;i<8;i++){
+                    if(eight[i]==null){
+                        eight[i] = node.getPosition();
+                        break;
+                    }
+                }
+            }
+            //now check to see if we need to go down the other way
+            if(node.getTail()!=null){
+                for(int i=0;i<8;i++){
+                    bool check = false;
+                    if(eight[i]!=null){
+                        //see for each eight if the current node is closer than that point, if so then it may be worth going down that path
+                        if(Mathf.Abs(point.y-node.getPosition().y) <= Mathf.Abs(point.y-((Vector3)eight[i]).y) && depth%2 == 0 
+                        || Mathf.Abs(point.z-node.getPosition().z) <= Mathf.Abs(point.z-((Vector3)eight[i]).z) && depth%2 == 1){
+                            check = true;
+                        }
+                    }else{
+                        if(check || i==0){
+                            //if it is null, we know we havent found all points so now we check to see if points are possibly on other side
+                            eight = find8KNN(node.getTail(), point, eight, depth+1);
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        else if(node.getTail()!=null){
+            //else is on our right (tail)
+            eight = find8KNN(node.getTail(), point, eight, depth+1);
+            //check to see if we are a neighbour
+            if(Vector3.Distance(node.getPosition(), point) < Mathf.Sqrt(2.1f * (grid) * (grid))){
+                //this node is a neighbour, so now find where to add in list
+                for(int i=0;i<8;i++){
+                    if(eight[i]==null){
+                        eight[i] = node.getPosition();
+                        break;
+                    }
+                }
+            }
+            //now check to see if we need to go down the other way
+            if(node.getHead()!=null){
+                for(int i=0;i<8;i++){
+                    bool check = false;
+                    if(eight[i]!=null){
+                        //see for each eight if the current node is closer than that point, if so then it may be worth going down that path
+                        if(Mathf.Abs(point.y-node.getPosition().y) <= Mathf.Abs(point.y-((Vector3)eight[i]).y) && depth%2 == 0 
+                        || Mathf.Abs(point.z-node.getPosition().z) <= Mathf.Abs(point.z-((Vector3)eight[i]).z) && depth%2 == 1){
+                            check = true;
+                        }
+                    }else if(check){
+                        //if it is null, we know we havent found all points so now we check to see if points are possibly on other side
+                        eight = find8KNN(node.getHead(), point, eight, depth+1);
+                        break;
+                    }else{
+                        break;
+                    }
+                }
+            }
+        }
+
+        return eight;
+    }
+    */
+
 }
+
+
+
+
+
+//          /Users/zac/Desktop/NPSC/Timed field outputs planet
+  //        /Users/zac/Desktop/NPSC/Planet2D

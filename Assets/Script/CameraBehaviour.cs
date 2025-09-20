@@ -1,4 +1,5 @@
 using UnityEngine;
+
 using UnityEngine.InputSystem; // New Input System
 
 public class CameraBehaviour : MonoBehaviour
@@ -39,6 +40,7 @@ public class CameraBehaviour : MonoBehaviour
 
     private void LateUpdate()
     {
+
         var mouse = Mouse.current;
         if (mouse == null) return;
 
@@ -80,5 +82,6 @@ public class CameraBehaviour : MonoBehaviour
     {
         Gizmos.color = Color.green;
         Gizmos.DrawSphere(orbitCenter, 0.2f);
+
     }
 }
