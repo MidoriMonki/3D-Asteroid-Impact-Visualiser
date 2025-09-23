@@ -7,7 +7,9 @@ using Unity.Jobs;
 using Unity.Burst;
 using System.Linq;
 using System.Threading.Tasks;
-using UnityEditor;
+
+
+// /Users/zac/Desktop/NPSC/Timed field outputs
 
 public class Collision
 {
@@ -20,19 +22,16 @@ public class Collision
     public int fileNumber;
     private Gradient gradient;
 
-    public Collision(int fileSize, Gradient g)
-    {
+    public Collision(int fileSize, Gradient g){
         gradient = g;
         timeSlices = new List<TimeSlice>();
         this.fileSize = fileSize;
     }
 
-    public void AddTimeSlice(TimeSlice slice)
-    {
+    public void AddTimeSlice(TimeSlice slice){
         timeSlices.Add(slice);
     }
-    public async Task Loader(string pFolderPath, int pTimeSliceDilation, int pCoordinateDilation, int singleIndex = -1)
-    {
+    public async Task Loader(string pFolderPath, int pTimeSliceDilation, int pCoordinateDilation, string name, int singleIndex = -1){
         await Task.Run(() => {
             folderPath = pFolderPath;
             TimeSlice newSlice;
@@ -108,7 +107,7 @@ public class Collision
                 {
                     string[] parameters = { "Pressure", "Temperature" };
                     newSlice = new TimeSlice(singlePath, idx.ToString(), pCoordinateDilation, rows, cols, gridSize,
-                                             colIgnoreA, colIgnoreB, rowIgnoreB, parameters);
+                                             colIgnoreA, colIgnoreB, rowIgnoreB, parameters, name);
                     timeSlices.Add(newSlice);
                     Debug.Log($"Loaded single slice index {idx}: {singlePath}");
                 }
@@ -125,16 +124,16 @@ public class Collision
 
                     string[] parameters = { "Pressure", "Temperature" };
                     newSlice = new TimeSlice(fullPath, i.ToString(), pCoordinateDilation, rows, cols, gridSize,
-                                             colIgnoreA, colIgnoreB, rowIgnoreB, parameters);
+                                             colIgnoreA, colIgnoreB, rowIgnoreB, parameters, name);
 
                     timeSlices.Add(newSlice);
                     Debug.Log($"Loaded slice index {i}: {fullPath}");
                 }
             }
         });
-
-        // rest of your existing post-processing (resource folders, setUpSlice, saveOutlineTask, updateGlobal) unchanged...
         int dirNumber = 0;
+        // rest of your existing post-processing (resource folders, setUpSlice, saveOutlineTask, updateGlobal) unchanged...
+        /*
         if (!Directory.Exists("Assets/Resources"))
             AssetDatabase.CreateFolder("Assets", "Resources");
         if (!Directory.Exists("Assets/Resources/MESHES"))
@@ -147,7 +146,7 @@ public class Collision
 
         AssetDatabase.CreateFolder("Assets/Resources/MESHES", $"RESULTS_{dirNumber}");
         AssetDatabase.CreateFolder("Assets/Resources/MESHES", $"INTERIOR_{dirNumber}");
-
+        */
         // Process time slices
         filesCompletionStatus = 0;
         fileNumber = timeSlices.Count;

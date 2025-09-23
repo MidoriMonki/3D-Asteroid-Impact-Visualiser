@@ -7,7 +7,6 @@ using System;
 using Unity.Collections;
 using Unity.Jobs;
 using System.Threading.Tasks;
-using UnityEditor;
 using System.Threading;
 
 public class TimeSlice
@@ -47,7 +46,9 @@ public class TimeSlice
     public Gradient gradient = new Gradient();
     private List<Vector2> Edges;
 
-    public TimeSlice(string pFilePath, string timestep, int pDilution, int rows, int cols, int gridSize, int ignoreColA, int ignoreColB, int ignoreRowB, string[] parameter){
+    private string name;
+
+    public TimeSlice(string pFilePath, string timestep, int pDilution, int rows, int cols, int gridSize, int ignoreColA, int ignoreColB, int ignoreRowB, string[] parameter, string name){
         this.dilution = pDilution;
         this.timestep = timestep;
         this.filePath = pFilePath;
@@ -58,6 +59,7 @@ public class TimeSlice
         this.ignoreColB = ignoreColB;
         this.parameter = parameter;
         this.ignoreRowB = ignoreRowB;
+        this.name = name;
     }
    
     public float ParseFloat(string value){
@@ -77,7 +79,7 @@ public class TimeSlice
             createOutlineArray();
             createOutlineMesh();
             //smooth it out
-            for (int i = 0; i < rows/dilution/12; i++){
+            for (int i = 0; i < rows/dilution/10; i++){
                 curveFitting(0.33f);
                 curveFitting(-0.34f);
             }
@@ -99,9 +101,19 @@ public class TimeSlice
 
     async public Task updateGlobal()
     {
-        Mesh mesh = Resources.Load<Mesh>($"MESHES/INTERIOR_{dirNum}/{timestep}");
-        Color[] col = mesh.colors;
-        await Task.Run(() => {
+        //Mesh mesh = Resources.Load<Mesh>($"/INTERIOR{dirNum}/{timestep}");
+        string dirPath = Path.Combine(System.IO.Directory.GetCurrentDirectory(), $"AIV_3D/{name}/INTERIOR/{timestep}.json");
+        string json = File.ReadAllText(dirPath);
+        MeshSaveData foundMesh = JsonUtility.FromJson<MeshSaveData>(json);
+
+        Mesh mesh = new Mesh();
+        mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+        mesh.vertices = foundMesh.vertices.ToArray();
+        mesh.triangles = foundMesh.triangles.ToArray();
+        Color[] col = foundMesh.colours.ToArray();
+        
+        await Task.Run(() =>
+        {
             col = updateMeshGlobal(col);
         });
         mesh.colors = col;
@@ -461,7 +473,7 @@ public class TimeSlice
     {
         //this distance variable and the one in tail needs to be dynamic, so bigger distances for higher dilution
         //float distance = Mathf.Sqrt(2.2f * (grid) * (grid));
-        float distance = Mathf.Sqrt(2.2f*(dilution+1));
+        float distance = Mathf.Sqrt(2.5f*(dilution+1));
         int nextNodeIndex = -1;
 
         //Go through all points, find closest one
@@ -499,7 +511,7 @@ public class TimeSlice
     {
         //this distance variable and the one in tail needs to be dynamic, so bigger distances for higher dilution
         //float distance = Mathf.Sqrt(2.2f * (grid) * (grid));
-        float distance = Mathf.Sqrt(2.2f*(dilution+1));
+        float distance = 2*Mathf.Sqrt(2.5f*(dilution+1));
         int nextNodeIndex = -1;
 
         //Go through all points, find closest one
@@ -580,10 +592,30 @@ public class TimeSlice
             outlineColours[i] = new Color((c.r+a[0])/b[0]??0, (c.b+a[1])/b[1]??0, (c.g+a[2])/b[2]??0, (c.a+a[3])/b[3]??0);
             //mesh.colors[i] = new Color(??0, c[1]??0, c[2]??0, c[3]??0);
         }
-
-
         mm.colors = outlineColours;
-        AssetDatabase.CreateAsset(mm, $"Assets/Resources/MESHES/RESULTS_{dirNum}/{timestep}.asset");
+
+        // Create mesh
+        MeshSaveData saveData = new MeshSaveData{
+            vertices = new List<Vector3>(mm.vertices),
+            triangles = new List<int>(mm.triangles),
+            colours = new List<Color>(mm.colors)
+        };
+
+        string json = JsonUtility.ToJson(saveData);
+        string dirPath = Path.Combine(System.IO.Directory.GetCurrentDirectory(), $"AIV_3D");
+        //Create our directories
+        Directory.CreateDirectory(dirPath);
+        dirPath = Path.Combine(dirPath, name);
+        Directory.CreateDirectory(dirPath);
+        Directory.CreateDirectory(Path.Combine(dirPath, $"OUTLINE"));
+        string thePath = Path.Combine(dirPath, $"OUTLINE/{timestep}.json");
+        try{
+            File.WriteAllText(thePath, json);
+        }catch(IOException e){
+            Debug.Log(e);
+        }
+
+        //AssetDatabase.CreateAsset(mm, $"Assets/Resources/MESHES/RESULTS_{dirNum}/{timestep}.asset");
 
 
         //Debug.Log("Saved new timestamp");
@@ -598,7 +630,7 @@ public class TimeSlice
             AssetDatabase.SaveAssets();
             AssetDatabase.SaveAssetIfDirty(mm);
         }*/
-    }
+        }
 
 
     public void saveTextFile(){
@@ -638,13 +670,35 @@ public class TimeSlice
             interiorVertices[outlineCorrespondingIndex[i]] = new Vector3(0, vertices[i].y, vertices[i].z);
         }
 
-        Mesh mm = new Mesh();
-        mm.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
-        mm.vertices = interiorVertices;
-        mm.triangles = triangles.ToArray();
-        mm.colors = colours;
-        mm.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
-        AssetDatabase.CreateAsset(mm, $"Assets/Resources/MESHES/INTERIOR_{dirNum}/{timestep}.asset");
+        //Mesh mm = new Mesh();
+        //mm.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+        //mm.vertices = interiorVertices;
+        //mm.triangles = triangles.ToArray();
+        //mm.colors = colours;
+        //mm.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+
+        // Create mesh
+        MeshSaveData saveData = new MeshSaveData{
+            vertices = new List<Vector3>(interiorVertices),
+            triangles = new List<int>(triangles.ToArray()),
+            colours = new List<Color>(colours)
+        };
+
+        string json = JsonUtility.ToJson(saveData);
+        string dirPath = Path.Combine(System.IO.Directory.GetCurrentDirectory(), $"AIV_3D");
+        //Create our directories
+        Directory.CreateDirectory(dirPath);
+        dirPath = Path.Combine(dirPath, name);
+        Directory.CreateDirectory(dirPath);
+        Directory.CreateDirectory(Path.Combine(dirPath, $"INTERIOR"));
+        string thePath = Path.Combine(dirPath, $"INTERIOR/{timestep}.json");
+        try{
+            File.WriteAllText(thePath, json);
+        }catch(IOException e){
+            Debug.Log(e);
+        }
+        
+        //AssetDatabase.CreateAsset(mm, $"Assets/Resources/MESHES/INTERIOR_{dirNum}/{timestep}.asset");
         triangles = null;
         interiorVertices = null;
         //Debug.Log("Saved new timestamp");
@@ -663,9 +717,29 @@ public class TimeSlice
 
     public void saveInteriorMesh(Mesh mesh){
 
-        mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
-        EditorUtility.SetDirty(mesh);
-        AssetDatabase.SaveAssets();
+        // Create mesh
+        MeshSaveData saveData = new MeshSaveData{
+            vertices = new List<Vector3>(mesh.vertices),
+            triangles = new List<int>(mesh.triangles),
+            colours = new List<Color>(mesh.colors)
+        };
+
+        string json = JsonUtility.ToJson(saveData);
+        string dirPath = Path.Combine(System.IO.Directory.GetCurrentDirectory(), $"AIV_3D");
+        //Create our directories
+        Directory.CreateDirectory(dirPath);
+        dirPath = Path.Combine(dirPath, name);
+        Directory.CreateDirectory(dirPath);
+        Directory.CreateDirectory(Path.Combine(dirPath, $"INTERIOR"));
+        string thePath = Path.Combine(dirPath, $"INTERIOR/{timestep}.json");
+        try{
+            File.WriteAllText(thePath, json);
+        }catch(IOException e){
+            Debug.Log(e);
+        }
+        //mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+        //EditorUtility.SetDirty(mesh);
+        //AssetDatabase.SaveAssets();
         //AssetDatabase.SaveAssets(mesh, $"Assets/Resources/MESHES/INTERIOR_{dirNum}/{timestep}.asset");
         //Debug.Log("Saved new timestamp");
         /*if (!File.Exists("Assets/Resources/MESHES/timestamp_0.asset"))
@@ -815,3 +889,14 @@ public class TimeSlice
 
 //          /Users/zac/Desktop/NPSC/Timed field outputs planet
   //        /Users/zac/Desktop/NPSC/Planet2D
+
+
+[System.Serializable]
+public class MeshSaveData
+{
+    public List<Vector3> vertices;
+    public List<int> triangles;
+    public List<Color> colours;
+}
+
+

@@ -48,6 +48,8 @@ public class MainLoader : MonoBehaviour
 
     private string selectedFolderPath = "";
 
+    public TMPro.TMP_InputField userGivenName;
+
     void Start()
     {
         // Frame rate button listeners
@@ -339,7 +341,6 @@ public class MainLoader : MonoBehaviour
     // ---------------------- Backend / Load ----------------------
     public async void LoadButtonClick()
     {
-
         // Defensive checks
         if (gradient == null)
         {
@@ -369,7 +370,7 @@ public class MainLoader : MonoBehaviour
         }
 
         // Determine arguments for loader:
-        int timeDilationForBackend = 1; // backend expects integer dilation parameter — keep as 1 to mean "use every file"
+        int timeDilationForBackend = 1; // backend expects integer dilation parameter ï¿½ keep as 1 to mean "use every file"
         int coordinateDilationForBackend = 1;
 
         // We keep the backend's expected integer parameters by mapping quality selection to dilation:
@@ -412,7 +413,7 @@ public class MainLoader : MonoBehaviour
                 }
                 else
                 {
-                    Debug.LogWarning("Single frame selected but no valid number entered — defaulting to first frame (index 0).");
+                    Debug.LogWarning("Single frame selected but no valid number entered ï¿½ defaulting to first frame (index 0).");
                     singleIndex = 0;
                 }
                 break;
@@ -421,10 +422,11 @@ public class MainLoader : MonoBehaviour
         // Create collision and start loader
         int fileSize = myAnalysis.findDataAmount();
         myCollision = new Collision(fileSize, gradient);
+        
         string csvPath = fileStructure.text;
-
+        Debug.Log(userGivenName.text);
         // Pass singleIndex as last parameter (default -1 if not single)
-        await myCollision.Loader(csvPath, timeDilationForBackend, coordinateDilationForBackend, singleIndex);
+        await myCollision.Loader(csvPath, timeDilationForBackend, coordinateDilationForBackend, userGivenName.text, singleIndex);
 
         // Optionally update UI after load (counts etc)
         UpdateFrameRateResult();

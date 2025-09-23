@@ -3,7 +3,6 @@ using UnityEngine.UI;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using UnityEditor;
 using System.Linq;
 
 [RequireComponent(typeof(MeshFilter))]
@@ -47,20 +46,22 @@ public class meow : MonoBehaviour
     private string[] fileNames;
     private int whichFile = 0;
 
+    private string name = "meow";
 
     void OnEnable()
     {
         Debug.Log("meow enabled!");
-        string path = "Assets/Resources/MESHES";
-        if (Directory.Exists(path))
+        //string path = "Assets/Resources/MESHES";
+        string dirPath = Path.Combine(System.IO.Directory.GetCurrentDirectory(), $"AIV_3D/{name}");
+        if (Directory.Exists(dirPath))
         {
-            Debug.Log("Directory exists: " + path);
+            Debug.Log("Directory exists: " + dirPath);
             loadOutline(0);
             loadInterior(0);
         }
         else
         {
-            Debug.LogWarning("Directory does NOT exist: " + path);
+            Debug.LogWarning("Directory does NOT exist: " + dirPath);
         }
     }
 
@@ -78,27 +79,68 @@ public class meow : MonoBehaviour
 
     void loadOutline(int n){
         //Find the Outline
-        fileNames = Directory.GetFiles("Assets/Resources/MESHES/RESULTS_0/", "*.asset");
+        string dirPath = Path.Combine(System.IO.Directory.GetCurrentDirectory(), $"AIV_3D/{name}/OUTLINE");
+        fileNames = Directory.GetFiles(dirPath, "*.json");
+
         fileNames = fileNames.OrderBy(s => int.Parse(s.Split("/")[s.Split("/").Length - 1].Split(".")[0])).ToArray();
 
-        mesh = Resources.Load<Mesh>("MESHES/RESULTS_0/"+ fileNames[n].Split("/")[fileNames[0].Split("/").Length-1].Split(".")[0]);
+        string json = File.ReadAllText(fileNames[n]);
+        MeshSaveData foundMesh = JsonUtility.FromJson<MeshSaveData>(json);
+
+        Mesh mesh = new Mesh();
+        vertices = foundMesh.vertices.ToArray();
+        colours = foundMesh.colours.ToArray();
+        outlineLength = vertices.Length;
+        
+        //mesh = Resources.Load<Mesh>("MESHES/RESULTS_0/"+ fileNames[n].Split("/")[fileNames[0].Split("/").Length-1].Split(".")[0]);
         Debug.Log("Found saved outline: " + mesh.name);
         Debug.Log("Outline length: " + mesh.vertices);
 
+        /*
         outlineVertices = mesh.vertices;
         vertices = mesh.vertices;
         colours = mesh.colors;
         outlineLength = vertices.Length;
-
+        */
         wrapOutline();
         trianglesWrap();
 
-        mesh = new Mesh();
         mesh.vertices = vertices;
         //Get colours through gradient
-        for(int i=0;i<colours.Length;i++){
+        /*
+        for (int i = 0; i < colours.Length; i++)
+        {
             colours[i] = gradient.Evaluate(colours[i].r);
         }
+        */
+        //Not crazy efficient obviously, this should have been put in global file
+        float? max = 0;
+        float? min = 0;
+
+        for (int i = 0; i < vertices.Length; i++){
+            if (max != null && min != null)
+            {
+                if (vertices[i].y > max)
+                {
+                    max = vertices[i].y;
+                }
+                if (vertices[i].y < min)
+                {
+                    min = vertices[i].y;
+                }
+            }
+            else
+            {
+                max = vertices[i].y;
+                min = vertices[i].y;
+            }
+        }
+
+        //For now we will just set the colour respective to the height, rather than a parameter to make easier to see :)
+        for (int i = 0; i < colours.Length; i++){
+            colours[i] = gradient.Evaluate((vertices[i].y-(float)min)/(float)(max-min));
+        }
+
         mesh.colors = colours;
         mesh.triangles = triangles;
         mesh.RecalculateNormals();
@@ -112,7 +154,6 @@ public class meow : MonoBehaviour
             triangles[i+2] = v2;
         }
 
-        mesh = new Mesh();
         mesh.vertices = vertices;
         mesh.colors = colours;
         mesh.triangles = triangles;
@@ -122,18 +163,45 @@ public class meow : MonoBehaviour
 
     void loadInterior(int n){
         //Code being used to render the interior
-        fileNames = Directory.GetFiles("Assets/Resources/MESHES/INTERIOR_0/", "*.asset");
-        fileNames = fileNames.OrderBy(s => int.Parse(s.Split("/")[s.Split("/").Length - 1].Split(".")[0])).ToArray();
+        //fileNames = Directory.GetFiles("Assets/Resources/MESHES/INTERIOR_0/", "*.asset");
+        //fileNames = fileNames.OrderBy(s => int.Parse(s.Split("/")[s.Split("/").Length - 1].Split(".")[0])).ToArray();
         //Debug.Log("MESHES/RESULTS_0/" + fileNames[0].Split("/")[0].Split(".")[0]);
+        string dirPath = Path.Combine(System.IO.Directory.GetCurrentDirectory(), $"AIV_3D/{name}/INTERIOR");
+        fileNames = Directory.GetFiles(dirPath, "*.json");
 
-        mesh = Resources.Load<Mesh>("MESHES/INTERIOR_0/" + fileNames[n].Split("/")[fileNames[0].Split("/").Length - 1].Split(".")[0]);
-        Debug.Log("Found saved outline: " + mesh.name);
+        fileNames = fileNames.OrderBy(s => int.Parse(s.Split("/")[s.Split("/").Length - 1].Split(".")[0])).ToArray();
+        string json = File.ReadAllText(fileNames[n]);
+        MeshSaveData foundMesh = JsonUtility.FromJson<MeshSaveData>(json);
+
+        //outlineVertices = foundMesh.vertices.ToArray();
+        vertices = foundMesh.vertices.ToArray();
+        triangles = foundMesh.triangles.ToArray();
+        colours = foundMesh.colours.ToArray();
+        outlineLength = vertices.Length;
+
+        Mesh mm = new Mesh();
+        Color[] colours2 = new Color[colours.Length];
+        mm.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+        //Get colours through gradient
+        for(int i=0;i<colours2.Length;i++){
+            colours2[i] = gradient2.Evaluate(colours[i].g);
+        }
+        mm.vertices = vertices;
+        mm.colors = colours2;
+        mm.triangles = triangles;
+        mm.RecalculateNormals();
+
+        interior2.mesh = mm;
+
+        //mesh = Resources.Load<Mesh>("MESHES/INTERIOR_0/" + fileNames[n].Split("/")[fileNames[0].Split("/").Length - 1].Split(".")[0]);
+
+        /*
         outlineVertices = mesh.vertices;
         vertices = mesh.vertices;
         colours = mesh.colors;
         Color[] colours2 = mesh.colors;
         triangles = mesh.triangles;
-
+        */
         mesh = new Mesh();
         mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
         mesh.vertices = vertices;
@@ -148,19 +216,6 @@ public class meow : MonoBehaviour
 
         mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
         interior.mesh = mesh;
-
-        Mesh mm = new Mesh();
-        mm.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
-        //Get colours through gradient
-        for(int i=0;i<colours2.Length;i++){
-            colours2[i] = gradient2.Evaluate(colours2[i].g);
-        }
-        mm.vertices = vertices;
-        mm.colors = colours2;
-        mm.triangles = triangles;
-        mm.RecalculateNormals();
-
-        interior2.mesh = mm;
     }
 
 
