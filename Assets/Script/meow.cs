@@ -82,7 +82,9 @@ public class meow : MonoBehaviour
         string dirPath = Path.Combine(System.IO.Directory.GetCurrentDirectory(), $"AIV_3D/{name}/OUTLINE");
         fileNames = Directory.GetFiles(dirPath, "*.json");
 
-        fileNames = fileNames.OrderBy(s => int.Parse(s.Split("/")[s.Split("/").Length - 1].Split(".")[0])).ToArray();
+        fileNames = fileNames
+            .OrderBy(s => int.Parse(Path.GetFileNameWithoutExtension(s)))
+            .ToArray();
 
         string json = File.ReadAllText(fileNames[n]);
         MeshSaveData foundMesh = JsonUtility.FromJson<MeshSaveData>(json);
@@ -169,7 +171,9 @@ public class meow : MonoBehaviour
         string dirPath = Path.Combine(System.IO.Directory.GetCurrentDirectory(), $"AIV_3D/{name}/INTERIOR");
         fileNames = Directory.GetFiles(dirPath, "*.json");
 
-        fileNames = fileNames.OrderBy(s => int.Parse(s.Split("/")[s.Split("/").Length - 1].Split(".")[0])).ToArray();
+        fileNames = fileNames
+            .OrderBy(s => int.Parse(Path.GetFileNameWithoutExtension(s)))
+            .ToArray();
         string json = File.ReadAllText(fileNames[n]);
         MeshSaveData foundMesh = JsonUtility.FromJson<MeshSaveData>(json);
 
