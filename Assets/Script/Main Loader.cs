@@ -370,18 +370,14 @@ public class MainLoader : MonoBehaviour
         }
 
         // Determine arguments for loader:
-        int timeDilationForBackend = 1; // backend expects integer dilation parameter � keep as 1 to mean "use every file"
+        int timeDilationForBackend = 1; 
         int coordinateDilationForBackend = 1;
 
-        // We keep the backend's expected integer parameters by mapping quality selection to dilation:
-        // If the backend expects coordinateDilation as an integer factor (1 -> full res, 2-> half grid etc),
-        // you may need to choose how to pass it. A simple approach: pass 1 for 100%, 2 for 25% (sqrt mapping),
-        // 3 for approx 11%, 4 for 6.25% etc. This matches your previous code style where smaller integer -> higher quality.
-        // Determine arguments for loader:
+        
         
         int singleIndex = -1; // default: not single
 
-        // Map quality selection -> backend coordinate dilation (unchanged)
+        // Map quality selection -> backend coordinate dilation 
         switch (selectedQuality)
         {
             case QualityOption.Q100: coordinateDilationForBackend = 1; break;
@@ -417,7 +413,13 @@ public class MainLoader : MonoBehaviour
                     singleIndex = 0;
                 }
                 break;
+            
+
         }
+
+        UpdateFileIndex(userGivenName.text);
+        StorageScroll scroll = FindObjectOfType<StorageScroll>();
+        if (scroll != null) scroll.RefreshList();
 
         // Create collision and start loader
         int fileSize = myAnalysis.findDataAmount();
@@ -425,15 +427,43 @@ public class MainLoader : MonoBehaviour
         
         string csvPath = fileStructure.text;
         Debug.Log(userGivenName.text);
-        // Pass singleIndex as last parameter (default -1 if not single)
+        
         await myCollision.Loader(csvPath, timeDilationForBackend, coordinateDilationForBackend, userGivenName.text, singleIndex);
 
-        // Optionally update UI after load (counts etc)
+        
         UpdateFrameRateResult();
         UpdateQualityResult();
     }
 
+    private void UpdateFileIndex(string datasetName)
+    {
+        string dirPath = Path.Combine(Directory.GetCurrentDirectory(), "AIV_3D");
+        if (!Directory.Exists(dirPath))
+            Directory.CreateDirectory(dirPath);
 
-  
+        string indexFilePath = Path.Combine(dirPath, "fileIndex.txt");
+
+        int resultingTimeSlices = 0;
+        int resultingCells = 0;
+
+        int.TryParse(resultFrameRate.text, out resultingTimeSlices);
+        int.TryParse(resultFrameQuality.text, out resultingCells);
+
+        string newLine = $"name={datasetName};timeslices={resultingTimeSlices};cells={resultingCells}";
+
+        List<string> lines = new List<string>();
+        if (File.Exists(indexFilePath))
+            lines.AddRange(File.ReadAllLines(indexFilePath));
+
+        lines.RemoveAll(l => l.Contains($"name={datasetName};"));
+
+        lines.Add(newLine);
+
+        File.WriteAllLines(indexFilePath, lines.ToArray());
+
+        Debug.Log($"Updated file index with dataset '{datasetName}' - TimeSlices: {resultingTimeSlices}, Cells: {resultingCells}");
+    }
+
+
 
 }

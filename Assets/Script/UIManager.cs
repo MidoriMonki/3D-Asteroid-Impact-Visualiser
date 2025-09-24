@@ -38,7 +38,7 @@ public class UIManager : MonoBehaviour
         if (mainCamera != null)
             mainCamera.backgroundColor = new Color(0f, 0f, 0.2f);
 
-        controllerRenderer.enabled = false;
+        SetControllerVisibility(false);
     }
 
     public void ShowFileLoader()
@@ -50,7 +50,7 @@ public class UIManager : MonoBehaviour
         if (mainCamera != null)
             mainCamera.backgroundColor = new Color(0f, 0f, 0.2f);
 
-        controllerRenderer.enabled = false;
+        SetControllerVisibility(false);
     }
 
     public void ShowController()
@@ -62,7 +62,7 @@ public class UIManager : MonoBehaviour
         if (mainCamera != null)
             mainCamera.backgroundColor = new Color(0f, 0f, 0.2f);
 
-        controllerRenderer.enabled = true;
+        SetControllerVisibility(true);
     }
 
     public void ToggleNotePanel()
@@ -83,5 +83,19 @@ public class UIManager : MonoBehaviour
             noteToggleText.text = "Hide Note";
         else
             noteToggleText.text = "Show Note";
+    }
+
+    private void SetControllerVisibility(bool isVisible)
+    {
+        if (controllerRenderer != null)
+        {
+            controllerRenderer.enabled = isVisible;
+
+            // Toggle all children
+            foreach (Transform child in controllerRenderer.transform)
+            {
+                child.gameObject.SetActive(isVisible);
+            }
+        }
     }
 }

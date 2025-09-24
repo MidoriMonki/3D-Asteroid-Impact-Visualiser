@@ -290,5 +290,17 @@ public class meow : MonoBehaviour
         }
     }
 
+
+    public void SetCollisionToBeRendered(string newName)
+    {
+        name = newName;
+        Debug.Log("Collision to be RENDERED switched to: " + name);
+
+        
+        loadOutline(0);
+        loadInterior(0);
+    }
+
+
 }
 
