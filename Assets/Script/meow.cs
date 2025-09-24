@@ -8,6 +8,7 @@ using System.Linq;
 [RequireComponent(typeof(MeshFilter))]
 public class meow : MonoBehaviour
 {
+    public Slider sliceSlider;
     public int sliceAngle = 180;
     public MeshFilter outline;
 
@@ -28,7 +29,7 @@ public class meow : MonoBehaviour
     public Text text;
     public int outlineLength;
     public Gradient gradient;
-
+    
 
     public Camera mainCamera;
 
@@ -58,6 +59,7 @@ public class meow : MonoBehaviour
             Debug.Log("Directory exists: " + dirPath);
             loadOutline(0);
             loadInterior(0);
+            SetupSlider();
         }
         else
         {
@@ -65,15 +67,16 @@ public class meow : MonoBehaviour
         }
     }
 
-    private void Update(){
-        //Go through each timestep
-        if (Input.GetKeyUp(KeyCode.N)){
-            whichFile++;
-            if (whichFile > fileNames.Length-1){
-                whichFile = 0;
-            }
-            loadOutline(whichFile);
-            loadInterior(whichFile);
+    private void Update()
+    {
+        // Keep your keyboard controls as backup
+        if (Input.GetKeyUp(KeyCode.N))
+        {
+            NextSlice ();
+        }
+        if (Input.GetKeyUp(KeyCode.B))
+        {
+            PrevSlice();
         }
     }
 
@@ -301,6 +304,60 @@ public class meow : MonoBehaviour
         loadInterior(0);
     }
 
+    private void SetupSlider()
+    {
+        string dirPath = Path.Combine(System.IO.Directory.GetCurrentDirectory(), $"AIV_3D/{name}/OUTLINE");
+        fileNames = Directory.GetFiles(dirPath, "*.json")
+            .OrderBy(s => int.Parse(Path.GetFileNameWithoutExtension(s)))
+            .ToArray();
+
+        if (sliceSlider != null)
+        {
+            sliceSlider.minValue = 0;
+            sliceSlider.maxValue = fileNames.Length - 1;
+            sliceSlider.wholeNumbers = true;
+            sliceSlider.onValueChanged.AddListener(OnSliderChanged);
+        }
+    }
+
+    private void OnSliderChanged(float value)
+    {
+        int index = Mathf.RoundToInt(value);
+        if (index != whichFile)
+        {
+            LoadSlice(index);
+        }
+    }
+
+    private void NextSlice()
+    {
+        int newIndex = whichFile + 1;
+        if (newIndex > fileNames.Length - 1) newIndex = 0;
+        LoadSlice(newIndex);
+
+        if (sliceSlider != null) sliceSlider.value = newIndex; 
+    }
+
+    private void PrevSlice()
+    {
+        int newIndex = whichFile - 1;
+        if (newIndex < 0) newIndex = fileNames.Length - 1;
+        LoadSlice(newIndex);
+
+        if (sliceSlider != null) sliceSlider.value = newIndex; 
+    }
+
+    private void LoadSlice(int index)
+    {
+        whichFile = index;
+        Debug.Log("Loading file index: " + whichFile);
+
+        loadOutline(whichFile);
+        loadInterior(whichFile);
+
+        if (sliceSlider != null && sliceSlider.value != whichFile)
+            sliceSlider.value = whichFile;
+    }
 
 }
 

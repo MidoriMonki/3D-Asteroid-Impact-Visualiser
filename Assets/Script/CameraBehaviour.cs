@@ -1,5 +1,5 @@
 using UnityEngine;
-
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem; // New Input System
 
 public class CameraBehaviour : MonoBehaviour
@@ -55,6 +55,13 @@ public class CameraBehaviour : MonoBehaviour
         // panning code
         if (mouse.leftButton.isPressed)
         {
+            // Prevent panning if pointer is over UI
+            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+            {
+                isPanning = false;
+                return;
+            }
+
             Vector2 currentPos = mouse.position.ReadValue();
 
             if (!isPanning)
@@ -68,7 +75,6 @@ public class CameraBehaviour : MonoBehaviour
                 lastMousePosition = currentPos;
 
                 Vector3 panMovement = (-transform.right * delta.x - transform.up * delta.y) * panSpeed * Time.deltaTime;
-
                 transform.position += panMovement;
             }
         }
@@ -76,6 +82,7 @@ public class CameraBehaviour : MonoBehaviour
         {
             isPanning = false;
         }
+
     }
 
     private void OnDrawGizmosSelected()
