@@ -9,7 +9,7 @@ using System.Linq;
 public class meow : MonoBehaviour
 {
     public Slider sliceSlider;
-    public int sliceAngle = 180;
+    public int sliceAngle = 20;
     public MeshFilter outline;
 
     public MeshFilter outline2;
@@ -151,19 +151,22 @@ public class meow : MonoBehaviour
         mesh.RecalculateNormals();
         outline.mesh = mesh;
 
+        Mesh mm = new Mesh();
+
         //Reverse normals because we are lazy
-        for(int i=0;i<triangles.Length; i += 3){
+        for (int i = 0; i < triangles.Length; i += 3)
+        {
             int v2 = triangles[i + 1];
             int v3 = triangles[i + 2];
-            triangles[i+1] = v3;
-            triangles[i+2] = v2;
+            triangles[i + 1] = v3;
+            triangles[i + 2] = v2;
         }
 
-        mesh.vertices = vertices;
-        mesh.colors = colours;
-        mesh.triangles = triangles;
-        mesh.RecalculateNormals();
-        outline2.mesh = mesh;
+        mm.vertices = vertices;
+        mm.colors = colours;
+        mm.triangles = triangles;
+        mm.RecalculateNormals();
+        outline2.mesh = mm;
     }
 
     void loadInterior(int n){
@@ -245,7 +248,7 @@ public class meow : MonoBehaviour
             float y = vertices[i].y;
             float z = vertices[i].z;
 
-            for (int j = 0; j < (strength); j++)
+            for (int j = 0; j < strength; j++)
             {
                 //angle += 2 * Mathf.PI / (strength);
                 verticesF[count] = new Vector3(Mathf.Cos(angle) * z, y, Mathf.Sin(angle) * z);
